@@ -56,3 +56,13 @@ You can even get a little fancy with recursion.  Which is good, because I haven'
 
 Before you get too carried away, tail call optimization hasn't been implemented yet so running `[fib 100]` might take awhile.  
 
+#### Roadmap
+
+* [ ] Implement destructuring _a la_ Clojure
+* [ ] Implement tail recursion
+* [ ] Native Python interop
+* [ ] Export bracket to Python
+* [ ] Export bracket to Clojure
+* [ ] Concurrency support
+* [ ] Useful stack traces
+* [ ] Editor support
