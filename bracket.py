@@ -1,9 +1,9 @@
 import io
 import sys
 
-from naga import mapv
+from naga import mapv, partial
 
-from lib.classes import Env, InPort, eof_object, Definition, Procedure, Symbol, If, Literal, Callable
+from lib.classes import Env, InPort, eof_object, Definition, Procedure, Symbol, If, Literal, Callable, Python, Import
 from lib.global_env import add_globals
 from lib.macros import defn, let
 from lib.utils import to_string, isa
@@ -78,6 +78,13 @@ def lex(t, tables, macros):
             return tables[t[0]](*t)
         if t[0] in macros:
             return _lex(macros[t[0]](*t))
+        if t[0].startswith('py/'):
+            return Python(t[0].replace('py/', ''), mapv(_lex, t[1:]))
+        if t[0] == 'import':
+            return Import(t[1])
+        if t[0].startswith('/') and t[1] == '[':
+            return Literal(map(_lex, t[2:-1]))
+
 
         # callable
         f, *exps = t

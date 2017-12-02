@@ -66,5 +66,6 @@ Before you get too carried away, tail call optimization hasn't been implemented 
 * [ ] Concurrency support
 * [ ] Useful stack traces
 * [ ] Editor support
+* [ ] Namespacing/modules
 * [ ] ...?
 * [ ] profit!

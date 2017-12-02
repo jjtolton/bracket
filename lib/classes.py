@@ -159,6 +159,28 @@ class Callable(SpecialForm):
             return proc(*exps)
 
 
+class Python(SpecialForm):
+
+    def __init__(self, fname, args):
+        self.fname = fname
+        self.args = args
+
+    def eval(self, env):
+        args = [arg.eval(env) for arg in self.args]
+        f = eval(self.fname)
+        return f(*args)
+
+
+class Import(SpecialForm):
+
+    def __init__(self, package):
+        self.package = package
+
+    def eval(self, env):
+        env[f'{self.package}'] = eval(f'importlib.import_module("{self.package}")', globals(), locals())
+        return env[f'{self.package}']
+
+
 class Env(dict):
     def __init__(self, parms=(), args=(), outer=None):
         self.args = args

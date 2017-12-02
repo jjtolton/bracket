@@ -45,6 +45,10 @@ class TokenTest(unittest.TestCase):
         res = list(p)
         self.assertEqual(expected, res)
 
+    def test_list_literal(self):
+        p = self.port('/[1 2 3]')
+        print(list(p))
+
 
 if __name__ == '__main__':
     unittest.main()
