@@ -1,7 +1,7 @@
 import io
 import unittest
 
-from lib.classes import InPort
+from bracket import InPort
 
 
 class TokenTest(unittest.TestCase):

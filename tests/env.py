@@ -1,6 +1,6 @@
 import unittest
 
-from lib.classes import Env
+from bracket import Env
 
 
 class EvalTest(unittest.TestCase):
