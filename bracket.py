@@ -19,11 +19,13 @@ def Sym(s, symbol_table={}):
     return symbol_table[s]
 
 
-_quote, _if, _set, _def, _fn, _begin, _definemacro, = mapv(Sym,
-                                                                  "quote   if   set!  def   lambda   begin   define-macro".split())
+_quote, _if, _set, _define, _lambda, _begin, _definemacro, = map(Sym,
+                                                                 "quote   if   set!  define   lambda   begin   define-macro".split())
 
-_quasiquote, _unquote, _unquotesplicing = mapv(Sym,
-                                               "quasiquote   unquote   unquote-splicing".split())
+_quasiquote, _unquote, _unquotesplicing = map(Sym,
+                                              "quasiquote   unquote   unquote-splicing".split())
+
+_append, _cons, _let, _cond = map(Sym, "append cons let cond".split())
 
 
 class Env(dict):
@@ -50,29 +52,6 @@ class Env(dict):
             return self.outer.find(var)
 
 
-class SpecialForm:
-    def eval(self, env):
-        raise NotImplementedError
-
-
-class Literal:
-    def __init__(self, val):
-        self.val = val
-
-    def eval(self, _):
-        return self.val
-
-
-class Definition(SpecialForm):
-    def __init__(self, name, body):
-        self.name = name
-        self.body = body
-
-    def eval(self, env):
-        env[self.name] = self.body.eval(env)
-        return None
-
-
 class Procedure:
     "A user-defined Scheme procedure."
 
@@ -86,66 +65,6 @@ class Procedure:
             args = args[:idx] + [args[idx + 1:]]
 
         return eval(self.exp, Env(self.parms, args, self.env))
-
-
-class If(SpecialForm):
-    def __init__(self, test, exp, alt):
-        self.exp = exp
-        self.test = test
-        self.alt = alt
-
-    def eval(self, env):
-        if self.test.eval(env):
-            return self.exp.eval(env)
-        else:
-            return self.alt.eval(env)
-
-
-class Callable(SpecialForm):
-    def __init__(self, proc, args):
-        self.proc = proc
-        self.args = args
-
-    def eval(self, env):
-        exps = [self.proc, *self.args]
-        while True:
-            proc, *exps = [eval(exp, env) for exp in exps]
-
-            if isa(proc, Procedure):
-                x = proc.body
-                # TODO: (maybe) scope managed here if issues
-                if '.' in proc.parms:
-                    idx = proc.parms.index('.')
-                    exps = exps[:idx] + [exps[idx:]]
-                    parms = proc.parms[:idx] + proc.parms[idx + 1:]
-                    env = Env(parms, exps, env)
-                else:
-                    env = Env(proc.parms, exps, env)
-                exps = x
-            elif callable(proc):
-                return Literal(proc(*exps))
-            else:
-                return Literal(proc)
-
-
-class Python(SpecialForm):
-    def __init__(self, fname, args):
-        self.fname = fname
-        self.args = args
-
-    def eval(self, env):
-        args = [arg.eval(env) for arg in self.args]
-        f = eval(self.fname)
-        return f(*args)
-
-
-class Import(SpecialForm):
-    def __init__(self, package):
-        self.package = package
-
-    def eval(self, env):
-        env[f'{self.package}'] = eval(f'importlib.import_module("{self.package}")', globals(), locals())
-        return env[f'{self.package}']
 
 
 def defn(name, args, exps):
@@ -180,15 +99,15 @@ def add_globals(self):
         'not': op.not_,
         '>': op.gt, '<': op.lt, '>=': op.ge, '<=': op.le, '=': op.eq,
         'equal?': op.eq, 'eq?': op.is_, 'length': len, 'cons': cons,
-        'car': lambda x: x[0], 'cdr': lambda x: x[1:], 'append': op.add,
+        'car': lambda x: x[0],
+        'cdr': lambda x: x[1:],
+        'append': op.add,
         'list': lambda *x: list(x), 'list?': lambda x: isa(x, list),
         'null?': lambda x: x == [], 'symbol?': lambda x: isa(x, Symbol),
         'boolean?': lambda x: isa(x, bool),
         'apply': lambda proc, l: proc(*l),
         'symbol': lambda x: Symbol(x),
         'count': len,
-        'car': lambda x: x[0],
-        'cdr': lambda x: x[1:],
         # 'eval': lambda x: eval(expand(x)),
         # 'load': lambda fn: load(fn),
 
@@ -287,6 +206,7 @@ special_forms = {'def': lambda _, name, body: Definition(lex(name, special_forms
                  'fn': lambda _, parms, *exps: Procedure(list(map(Symbol, parms)),
                                                          [lex(e, special_forms, macros) for e in exps]),
                  'if': lambda _, cond, exp, alt=None: If(*[lex(e, special_forms, macros) for e in [cond, exp, alt]])}
+
 macros = {'defn': lambda _, name, args, exps: defn(name, args, exps),
           'let': lambda _, forms, exps: let(forms, exps)}
 
@@ -308,30 +228,7 @@ def atom(t):
     if t.startswith('\'') and t.endswith('\''):
         return t[1:-1]
 
-    return Sym(t)
-
-
-def lex(t, tables, macros):
-    def _lex(t):
-        return lex(t, tables, macros)
-
-    if isinstance(t, list):
-        if isa(t[0], list):
-            return _lex(mapv(_lex, t))
-        if t[0] in tables:
-            return tables[t[0]](*t)
-        if t[0] in macros:
-            return _lex(macros[t[0]](*t))
-
-        # callable
-        f, *exps = t
-        if isa(f, (Procedure, Callable)):
-            return Callable(proc=f, args=mapv(_lex, exps))
-        else:
-            return Callable(proc=Symbol(f), args=mapv(_lex, exps))
-
-    else:
-        return atom(t)
+    return Symbol(t)
 
 
 def read(inport: type(InPort)):
@@ -369,14 +266,14 @@ def eval(x, env=global_env):
             return env.find(x)[x]
         elif not isa(x, list):  # constant literal
             return x
-        elif x[0] is _if:  # (if test conseq alt)
+        elif x[0] == 'if':  # (if test conseq alt)
             (_, test, conseq, alt) = x
             x = (conseq if eval(test, env) else alt)
-        elif x[0] is _def:  # (define var exp)
+        elif x[0] == 'def':  # (define var exp)
             (_, var, exp) = x
             env[var] = eval(exp, env)
             return None
-        elif x[0] is _fn:  # (lambda (var*) exp)
+        elif x[0] == 'fn':  # (lambda (var*) exp)
             (_, vars, exp) = x
             return Procedure(vars, exp, env)
         else:  # (proc exp*)
@@ -396,11 +293,86 @@ def eval(x, env=global_env):
                 return proc(*exps)
 
 
-def expand(x):
-    if x[0] == 'defn':
-        _, name, args, exps = x
-        return [_def, name, [_fn, args, exps]]
-    return x
+def require(x, predicate, msg="wrong length"):
+    "Signal a syntax error if predicate is false."
+    if not predicate: raise SyntaxError(to_string(x) + ': ' + msg)
+
+
+def expand(x, toplevel=False):
+    "Walk tree of x, making optimizations/fixes, and signaling SyntaxError."
+    require(x, x != [])  # () => Error
+    if not isa(x, list):  # constant => unchanged
+        return x
+    elif x[0] is _quote:  # (quote exp)
+        require(x, len(x) == 2)
+        return x
+    elif x[0] is _if:
+        if len(x) == 3: x = x + [None]  # (if t c) => (if t c None)
+        require(x, len(x) == 4)
+        return map(expand, x)
+    elif x[0] is _set:
+        require(x, len(x) == 3)
+        var = x[1]  # (set! non-var exp) => Error
+        require(x, isa(var, Symbol), "can set! only a symbol")
+        return [_set, var, expand(x[2])]
+    elif x[0] is _define or x[0] is _definemacro:
+        require(x, len(x) >= 3)
+        _def, v, body = x[0], x[1], x[2:]
+        if isa(v, list) and v:  # (define (f args) body)
+            f, args = v[0], v[1:]  # => (define f (lambda (args) body))
+            return expand([_def, f, [_lambda, args] + body])
+        else:
+            require(x, len(x) == 3)  # (define non-var/list exp) => Error
+            require(x, isa(v, Symbol), "can define only a symbol")
+            exp = expand(x[2])
+            if _def is _definemacro:
+                require(x, toplevel, "define-macro only allowed at top level")
+                proc = eval(exp)
+                require(x, callable(proc), "macro must be a procedure")
+                macro_table[v] = proc  # (define-macro v proc)
+                return None  # => None; add v:proc to macro_table
+            return [_define, v, exp]
+    elif x[0] is _begin:
+        if len(x) == 1:
+            return None  # (begin) => None
+        else:
+            return [expand(xi, toplevel) for xi in x]
+    elif x[0] is _lambda:  # (lambda (x) e1 e2)
+        require(x, len(x) >= 3)  # => (lambda (x) (begin e1 e2))
+        vars, body = x[1], x[2:]
+        require(x, (isa(vars, list) and all(isa(v, Symbol) for v in vars))
+                or isa(vars, Symbol), "illegal lambda argument list")
+        exp = body[0] if len(body) == 1 else [_begin] + body
+        return [_lambda, vars, expand(exp)]
+    elif x[0] is _quasiquote:  # `x => expand_quasiquote(x)
+        require(x, len(x) == 2)
+        return expand_quasiquote(x[1])
+    elif isa(x[0], Symbol) and x[0] in macro_table:
+        return expand(macro_table[x[0]](*x[1:]), toplevel)  # (m arg...)
+    else:  # => macroexpand if m isa macro
+        return mapv(expand, x)  # (f arg...) => expand each
+
+
+macro_table = {Sym('defn'): defn,
+               Sym('let'): let}  ## More macros can go here
+
+
+def is_pair(x): return x != [] and isa(x, list)
+
+
+def expand_quasiquote(x):
+    """Expand `x => 'x; `,x => x; `(,@x y) => (append x y) """
+    if not is_pair(x):
+        return [_quote, x]
+    require(x, x[0] is not _unquotesplicing, "can't splice here")
+    if x[0] is _unquote:
+        require(x, len(x) == 2)
+        return x[1]
+    elif is_pair(x[0]) and x[0][0] is _unquotesplicing:
+        require(x[0], len(x[0]) == 2)
+        return [_append, x[0][1], expand_quasiquote(x[1:])]
+    else:
+        return [_cons, expand_quasiquote(x[0]), expand_quasiquote(x[1:])]
 
 
 # eval(parse('[defn add [. xs] [apply + xs]]'), global_env)
