@@ -59,7 +59,7 @@ Before you get too carried away, tail call optimization hasn't been implemented 
 #### Roadmap
 
 * [ ] Implement destructuring _a la_ Clojure
-* [ ] Implement tail recursion
+* [x] Implement tail recursion
 * [ ] Native Python interop
 * [ ] Export bracket to Python
 * [ ] Export bracket to Clojure

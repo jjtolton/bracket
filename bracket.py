@@ -2,34 +2,21 @@ import io
 import re
 import sys
 from functools import reduce
-from six import with_metaclass
-import naga
-from naga import mapv, conj as cons, partition
 
+import naga
+from naga import mapv, conj as cons
+
+from lib.macros import macro_table
+from lib.symbols import fn_, unquotesplicing_, append_, cons_, Symbol, quote_, if_, def_, begin_, quasiquote_, unquote_, \
+    defmacro_
 from lib.utils import to_string, isa
 
 
-class Symbol(str): pass
 
-
-def Sym(s, symbol_table={}):
-    "Find or create unique Symbol entry for str s in symbol table."
-    if s not in symbol_table:
-        symbol_table[s] = Symbol(s)
-    return symbol_table[s]
-
-
-_quote, _if, _set, _define, _lambda, _begin, _definemacro, = map(Sym,
-                                                                 "quote   if   set!  define   lambda   begin   define-macro".split())
-
-_quasiquote, _unquote, _unquotesplicing = map(Sym,
-                                              "quasiquote   unquote   unquote-splicing".split())
-
-_append, _cons, _let, _cond = map(Sym, "append cons let cond".split())
 
 
 class Env(dict):
-    "An environment: a dict of {'var':val} pairs, with an outer Env."
+    """An environment: a dict of {'var':val} pairs, with an outer Env."""
 
     def __init__(self, parms=(), args=(), outer=None):
         # Bind parm list to corresponding args, or single parm to list of args
@@ -43,7 +30,7 @@ class Env(dict):
             self.update(zip(parms, args))
 
     def find(self, var):
-        "Find the innermost Env where var appears."
+        """Find the innermost Env where var appears."""
         if var in self:
             return self
         elif self.outer is None:
@@ -52,11 +39,11 @@ class Env(dict):
             return self.outer.find(var)
 
 
-class Procedure:
+class Proc:
     "A user-defined Scheme procedure."
 
-    def __init__(self, parms, exp, env):
-        self.parms, self.exp, self.env = parms, exp, env
+    def __init__(self, parms, exp, env, parent):
+        self.parms, self.exp, self.env, self.parent = parms, exp, env, parent
 
     def __call__(self, *args):
         if '.' in self.parms:
@@ -67,21 +54,21 @@ class Procedure:
         return eval(self.exp, Env(self.parms, args, self.env))
 
 
-def defn(name, args, exps):
-    res = ['def', name, ['fn', args, exps]]
-    return res
+class Procedure:
+    def __init__(self, env, forms):
+        self.procs = []
+        for form in forms:
+            self.procs.append(Proc(*form, *[env, self]))
 
+        # self.procs = [Proc(*(*form, *[env])) for form in forms]
 
-def let(forms, exps):
-    forms = (x for x in list(partition(2, forms))[::-1])
+    def __call__(self, *args):
+        return self.proc(*args)(*args)
 
-    def _let(forms, exps):
-        for a, b in forms:
-            return _let(forms, [['fn', [a], exps], b])
-        return exps
-
-    res = _let(forms, exps)
-    return res
+    def proc(self, *args):
+        for p in self.procs:
+            if len(args) == len(p.parms):
+                return p
 
 
 def add_globals(self):
@@ -200,17 +187,6 @@ def repl(prompt='$-> ', inport=InPort(sys.stdin), out=sys.stdout):
             print('%s: %s' % (type(e).__name__, e))
 
 
-# TODO: this more or less defeats the point of protocols, see if we can take this out before it gets out of control
-special_forms = {'def': lambda _, name, body: Definition(lex(name, special_forms, macros),
-                                                         lex(body, special_forms, macros)),
-                 'fn': lambda _, parms, *exps: Procedure(list(map(Symbol, parms)),
-                                                         [lex(e, special_forms, macros) for e in exps]),
-                 'if': lambda _, cond, exp, alt=None: If(*[lex(e, special_forms, macros) for e in [cond, exp, alt]])}
-
-macros = {'defn': lambda _, name, args, exps: defn(name, args, exps),
-          'let': lambda _, forms, exps: let(forms, exps)}
-
-
 def atom(t):
     if t == '#t':
         return True
@@ -274,14 +250,18 @@ def eval(x, env=global_env):
             env[var] = eval(exp, env)
             return None
         elif x[0] == 'fn':  # (lambda (var*) exp)
-            (_, vars, exp) = x
-            return Procedure(vars, exp, env)
+            (_, exp) = x
+            return Procedure(env, exp)
         else:  # (proc exp*)
             exps = [eval(exp, env) for exp in x]
             proc = exps.pop(0)
-            if isa(proc, Procedure):
-                x = proc.exp
 
+            if isa(proc, Procedure):
+                x = proc.proc(*exps)
+                proc = x
+
+            if isa(x, Proc):
+                x = proc.exp
                 if '.' in proc.parms:
                     idx = proc.parms.index('.')
                     exps = exps[:idx] + [exps[idx:]]
@@ -289,6 +269,7 @@ def eval(x, env=global_env):
                     env = Env(parms, exps, proc.env)
                 else:
                     env = Env(proc.parms, exps, proc.env)
+
             else:
                 return proc(*exps)
 
@@ -303,58 +284,58 @@ def expand(x, toplevel=False):
     require(x, x != [])  # () => Error
     if not isa(x, list):  # constant => unchanged
         return x
-    elif x[0] is _quote:  # (quote exp)
+    elif x[0] is quote_:  # (quote exp)
         require(x, len(x) == 2)
         return x
-    elif x[0] is _if:
-        if len(x) == 3: x = x + [None]  # (if t c) => (if t c None)
+    elif x[0] is if_:
+        if len(x) == 3:
+            x = x + [None]  # (if t c) => (if t c None)
         require(x, len(x) == 4)
-        return map(expand, x)
-    elif x[0] is _set:
-        require(x, len(x) == 3)
-        var = x[1]  # (set! non-var exp) => Error
-        require(x, isa(var, Symbol), "can set! only a symbol")
-        return [_set, var, expand(x[2])]
-    elif x[0] is _define or x[0] is _definemacro:
+        return mapv(expand, x)
+    elif x[0] is def_ or x[0] is defmacro_:
         require(x, len(x) >= 3)
-        _def, v, body = x[0], x[1], x[2:]
-        if isa(v, list) and v:  # (define (f args) body)
-            f, args = v[0], v[1:]  # => (define f (lambda (args) body))
-            return expand([_def, f, [_lambda, args] + body])
-        else:
-            require(x, len(x) == 3)  # (define non-var/list exp) => Error
-            require(x, isa(v, Symbol), "can define only a symbol")
-            exp = expand(x[2])
-            if _def is _definemacro:
-                require(x, toplevel, "define-macro only allowed at top level")
-                proc = eval(exp)
-                require(x, callable(proc), "macro must be a procedure")
-                macro_table[v] = proc  # (define-macro v proc)
-                return None  # => None; add v:proc to macro_table
-            return [_define, v, exp]
-    elif x[0] is _begin:
+        _d, v, body = x[0], x[1], x[2:]
+        exp = expand(x[2])
+        if _d is defmacro_:
+            require(x, toplevel, "define-macro only allowed at top level")
+            proc = eval(exp)
+            require(x, callable(proc), "macro must be a procedure")
+            macro_table[v] = proc  # (define-macro v proc)
+            return None  # => None; add v:proc to macro_table
+        return [def_, v, exp]
+
+    elif x[0] is begin_:
         if len(x) == 1:
             return None  # (begin) => None
         else:
             return [expand(xi, toplevel) for xi in x]
-    elif x[0] is _lambda:  # (lambda (x) e1 e2)
+
+    elif x[0] is fn_:  # (lambda (x) e1 e2)
         require(x, len(x) >= 3)  # => (lambda (x) (begin e1 e2))
-        vars, body = x[1], x[2:]
-        require(x, (isa(vars, list) and all(isa(v, Symbol) for v in vars))
-                or isa(vars, Symbol), "illegal lambda argument list")
-        exp = body[0] if len(body) == 1 else [_begin] + body
-        return [_lambda, vars, expand(exp)]
-    elif x[0] is _quasiquote:  # `x => expand_quasiquote(x)
+        body = x[1:]
+
+        if all(isa(e, list) for e in body) and all(isa(e[0], list) for e in body):
+            exp = mapv(expand, body)
+        else:
+            exp = [expand(body)]
+        # require(x, (isa(vars, list) and all(isa(v, Symbol) for v in vars))
+        #         or isa(vars, Symbol), "illegal lambda argument list")
+        # exp = body[0] if len(body) == 1 else [begin_] + body
+        return [fn_, exp]
+
+    elif x[0] is quasiquote_:  # `x => expand_quasiquote(x)
         require(x, len(x) == 2)
         return expand_quasiquote(x[1])
+
     elif isa(x[0], Symbol) and x[0] in macro_table:
         return expand(macro_table[x[0]](*x[1:]), toplevel)  # (m arg...)
+
+    # elif isa(x[0], list):
+    #     parms, *body = x
+    #     return [parms, *mapv(expand, body)]
+
     else:  # => macroexpand if m isa macro
         return mapv(expand, x)  # (f arg...) => expand each
-
-
-macro_table = {Sym('defn'): defn,
-               Sym('let'): let}  ## More macros can go here
 
 
 def is_pair(x): return x != [] and isa(x, list)
@@ -363,27 +344,30 @@ def is_pair(x): return x != [] and isa(x, list)
 def expand_quasiquote(x):
     """Expand `x => 'x; `,x => x; `(,@x y) => (append x y) """
     if not is_pair(x):
-        return [_quote, x]
-    require(x, x[0] is not _unquotesplicing, "can't splice here")
-    if x[0] is _unquote:
+        return [quote_, x]
+    require(x, x[0] is not unquotesplicing_, "can't splice here")
+    if x[0] is unquote_:
         require(x, len(x) == 2)
         return x[1]
-    elif is_pair(x[0]) and x[0][0] is _unquotesplicing:
+    elif is_pair(x[0]) and x[0][0] is unquotesplicing_:
         require(x[0], len(x[0]) == 2)
-        return [_append, x[0][1], expand_quasiquote(x[1:])]
+        return [append_, x[0][1], expand_quasiquote(x[1:])]
     else:
-        return [_cons, expand_quasiquote(x[0]), expand_quasiquote(x[1:])]
+        return [cons_, expand_quasiquote(x[0]), expand_quasiquote(x[1:])]
 
 
 # eval(parse('[defn add [. xs] [apply + xs]]'), global_env)
-eval(parse('''
-[defn add [res xs]
-    [if [= 0 [count xs]]
-        res
-        [add [+ res [car xs]] 
-             [cdr xs]]]]'''))
+eval(parse('''[defn add
+           [[xs] [add 0 xs]]
+           [[acc xs]
+            [if [= 0 [count xs]]
+                acc
+                [add [+ acc [first xs]]
+                     [rest xs]]]]]'''))
 
 # eval(parse('[add 0 [list 1 2 3]]'), global_env)
+
+eval(parse('[defn foo [x] x]'))
 
 if __name__ == '__main__':
     repl()
