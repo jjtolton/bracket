@@ -8,7 +8,7 @@ from naga import mapv, conj as cons
 
 from lib.destructure import destruct, prestruct
 from lib.macros import macro_table
-from lib.symbols import fn_, unquotesplicing_, append_, cons_, KeyWord
+from lib.symbols import fn_, unquotesplicing_, append_, cons_, KeyWord, PyObject
 from lib.symbols import unquote_, defmacro_, Symbol, quote_, if_, def_, begin_, quasiquote_
 from lib.utils import to_string, isa
 
@@ -16,7 +16,7 @@ from lib.utils import to_string, isa
 class Env(dict):
     """An environment: a dict of {'var':val} pairs, with an outer Env."""
 
-    def __init__(self, parms=(), args=(), outer=None):
+    def __init__(self, parms=(), args=(), outer=None, name=None):
         # Bind parm list to corresponding args, or single parm to list of args
         self.outer = outer
         if isa(parms, Symbol):
@@ -114,7 +114,8 @@ def add_globals(self):
     return self
 
 
-global_env = add_globals(Env())
+global_env = add_globals(Env(__name__))
+
 eof_object = Symbol('#<eof-object>')  # Note: uninterned; can't be read
 
 
@@ -209,6 +210,10 @@ def atom(t):
 
     if t.startswith('\'') and t.endswith('\''):
         return t[1:-1]
+
+    if t.startswith('py/'):
+        return PyObject(t[3:])
+
 
     return Symbol(t)
 

@@ -94,6 +94,17 @@ You can name your destructured items
     ;;=> [1, 2, 3, [1, 2, 3, 4]]
 
 
+Access Python interop via "`py/`"
+
+    $->  [py/dict /[[1 2] [3 4]]
+    ;;=> {1: 2, 3: 4}
+    $->  [def m [py/dict /[[1 2] [3 4]]]
+    $->  [get m 1]
+    2
+    $->  [py/sum /[1 2 3 4]]
+    ;;=> 10
+    
+
 #### Roadmap
 
 * [x] Implement tail recursion
