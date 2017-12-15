@@ -109,7 +109,9 @@ def add_globals(self):
         'print': lambda x: print(x),
         'pformat': lambda s, *args: print(s.format(*args)),
         'display': lambda x, port=sys.stdout: port.write(x if isa(x, str) else to_string(x)),
-        'newline': lambda: print()})
+        'newline': lambda: print(),
+        '.': lambda k, v: getattr(k, v)
+    })
     self.update(vars(naga))
     return self
 
@@ -274,8 +276,13 @@ def eval(x, env=global_env):
             return q
 
         else:  # (proc exp*)
+            if x[0] == '.':
+                x[-1] = str(x[-1])
+
             exps = [eval(exp, env) for exp in x]
             proc = exps.pop(0)
+
+
 
             if isa(proc, Procedure):
                 x = proc.proc(*exps)

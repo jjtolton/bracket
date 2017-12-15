@@ -105,6 +105,14 @@ Access Python interop via "`py/`"
     ;;=> 10
     
 
+Access Python object methods with "`.`"
+
+    $-> [def split [. py/str split]]
+    $-> [split 'hey guy']
+    ['hey', 'guy']
+    $-> [split 'name=taco' '=']
+    ['name', 'taco']
+
 #### Roadmap
 
 * [x] Implement tail recursion
