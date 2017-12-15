@@ -122,7 +122,10 @@ Access Python object methods with "`.`"
 * [x] Variadic arguments
 * [x] Improved destructuring
 * [ ] Namespacing/modules
-* [ ] Native Python interop
+* [ ] Native Python interop  
+  * [x] py/ literal
+  * [x] `.` accessor
+  * [ ] python imports
 * [ ] User defined macros
 * [ ] Map literals
 * [ ] iterator constructs ("`for`" special form)
