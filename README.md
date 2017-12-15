@@ -99,6 +99,8 @@ Arrity can be variadic!
 * [ ] Native Python interop
 * [ ] User defined macros
 * [ ] Map literals
+* [ ] iterator constructs ("`for`" special form)
+* [ ] better apply method
 * [ ] Export bracket to Python
 * [ ] Concurrency support
 * [ ] Useful stack traces
