@@ -1,18 +1,18 @@
 from naga import partition
 
 from lib.symbols import def_, fn_
+from lib.utils import isa
 
 
 def defn(*args):
-
-    # if len(args) == 2:
-    #     name, *exps = args
-    #     exps = sorted(exps, key=lambda x: len(x[0]))
-
-
-    # if len(args) == 3:
-    name, args, exps = args
-    res = [def_, name, [fn_, args, exps]]
+    name, *exps = args
+    # @formatter:off
+    if (len(exps) == 2 and
+        isa(exps[0], list) and
+        len(exps[0]) == 0):
+        return [def_, name, [fn_, [[], exps[1]]]]
+    # @formatter:on
+    res = [def_, name, [fn_, *exps]]
     return res
 
 
@@ -30,5 +30,3 @@ def let(forms, exps):
 
 macro_table = {'defn': defn,
                'let': let}  ## More macros can go here
-
-

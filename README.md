@@ -35,6 +35,7 @@ Maybe try some fancier stuff!
                c [add a b]]
           [add a b c]]
 	;;=> 14
+
 **[bracket]** also supports assignments.
 
 	$->  [def name 'taco']
@@ -54,18 +55,44 @@ You can even get a little fancy with recursion.  Which is good, because I haven'
 	$->  [fib 20]
 	;;=> 6765
 
-Before you get too carried away, tail call optimization hasn't been implemented yet so running `[fib 100]` might take awhile.  
+Go crazy with tail recursion!
+
+    $->  [defn sum [acc xs]
+           [if [= 0 [count xs]]
+               acc
+               [sum [add acc [first xs]] [rest xs]]]]
+    $->  [sum 0 [range 10000]]
+    ;;=> 49995000
+    
+Take advantage of variadic arguments!
+
+    $->  [defn xsum 
+           [[n]
+            [xsum 0 [range n]]]
+           [[acc xs]
+            [if [= 0 [count xs]]
+                acc
+                [xsum [add acc [first xs]] [rest xs]]]]]
+    $->  [xsum 10]
+    ;;=> 45
+    $->  [xsum 10000]
+    ;;=> 49995000
 
 #### Roadmap
 
-* [ ] Implement destructuring _a la_ Clojure
 * [x] Implement tail recursion
+* [x] List literals
+* [x] multi-arrity dispatch
+* [x] Implement destructuring _a la_ Clojure
+* [ ] Improved destructuring
+* [ ] Variadic arguments
+* [ ] Namespacing/modules
 * [ ] Native Python interop
+* [ ] Map literals
 * [ ] Export bracket to Python
-* [ ] Export bracket to Clojure
 * [ ] Concurrency support
 * [ ] Useful stack traces
 * [ ] Editor support
-* [ ] Namespacing/modules
+* [ ] Export bracket to Clojure (maybe?)
 * [ ] ...?
 * [ ] profit!

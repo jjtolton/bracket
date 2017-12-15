@@ -6,13 +6,11 @@ from functools import reduce
 import naga
 from naga import mapv, conj as cons
 
+from lib.destructure import destruct, prestruct
 from lib.macros import macro_table
-from lib.symbols import fn_, unquotesplicing_, append_, cons_, Symbol, quote_, if_, def_, begin_, quasiquote_, unquote_, \
-    defmacro_
+from lib.symbols import fn_, unquotesplicing_, append_, cons_
+from lib.symbols import unquote_, defmacro_, Symbol, quote_, if_, def_, begin_, quasiquote_
 from lib.utils import to_string, isa
-
-
-
 
 
 class Env(dict):
@@ -24,10 +22,8 @@ class Env(dict):
         if isa(parms, Symbol):
             self.update({parms: list(args)})
         else:
-            if len(args) != len(parms):
-                raise TypeError('expected %s, given %s, '
-                                % (to_string(parms), to_string(args)))
-            self.update(zip(parms, args))
+            self.update({k: v for k, v in naga.partition(2, prestruct(parms, args))})
+            # self.update(zip(parms, args))
 
     def find(self, var):
         """Find the innermost Env where var appears."""
@@ -46,29 +42,31 @@ class Proc:
         self.parms, self.exp, self.env, self.parent = parms, exp, env, parent
 
     def __call__(self, *args):
-        if '.' in self.parms:
-            args = list(args)
-            idx = self.parms.index('.')
-            args = args[:idx] + [args[idx + 1:]]
-
+        self.exp = destruct(self.parms, list(args), self.exp)
         return eval(self.exp, Env(self.parms, args, self.env))
 
 
 class Procedure:
     def __init__(self, env, forms):
         self.procs = []
+        self.variadic = None
         for form in forms:
+            if '.' in form[0]:
+                self.variadic = Proc(*form, *[env, self])
             self.procs.append(Proc(*form, *[env, self]))
 
-        # self.procs = [Proc(*(*form, *[env])) for form in forms]
+            # self.procs = [Proc(*(*form, *[env])) for form in forms]
 
     def __call__(self, *args):
         return self.proc(*args)(*args)
 
     def proc(self, *args):
         for p in self.procs:
-            if len(args) == len(p.parms):
+            if len(p.parms) == len(args):
                 return p
+        else:
+            return self.variadic
+
 
 
 def add_globals(self):
@@ -137,7 +135,7 @@ class InPort(object):
     #                     """,
     #                        flags=re.X)
     tokenizer = re.compile(r"""\s*([~@]               |
-                                   [\["`,\]]          |    # capture [ " ` , ] tokens
+                                   [\[/`,\]]          |    # capture [ " ` , ] tokens
                                    '(?:[\\].|[^\\'])*'|    # strings
                                    ;.*|                    # single line comments
                                    [^\s\['"`,;\]]*)        # match everything that is NOT a special character
@@ -170,7 +168,7 @@ class InPort(object):
         return self.next_token()
 
 
-def repl(prompt='$-> ', inport=InPort(sys.stdin), out=sys.stdout):
+def repl(prompt='$-> ', inport=InPort(sys.stdin), out=sys.stdout, debug=False):
     "A prompt-read-eval-print loop."
     while True:
         try:
@@ -183,8 +181,21 @@ def repl(prompt='$-> ', inport=InPort(sys.stdin), out=sys.stdout):
             if val is not None and out:
                 output = to_string(val)
                 print(f';;=> {output}', file=out)
+        except KeyboardInterrupt:
+            print()
+            continue
         except Exception as e:
             print('%s: %s' % (type(e).__name__, e))
+            if debug is True:
+                raise e
+
+
+class KeyWord(str):
+    def __repr__(self):
+        return f'-{super().__repr__()}'
+
+    def __str__(self):
+        return f'-{super().__str__()}'
 
 
 def atom(t):
@@ -201,10 +212,16 @@ def atom(t):
     except ValueError:
         pass
 
+    if t.startswith('-'):
+        return KeyWord(t[1:])
+
     if t.startswith('\'') and t.endswith('\''):
         return t[1:-1]
 
     return Symbol(t)
+
+
+quotes = {'/'}
 
 
 def read(inport: type(InPort)):
@@ -219,12 +236,15 @@ def read(inport: type(InPort)):
                     res.append(_read(t))
         elif t == ']':
             raise Exception("unmatched delimiter: ]")
+        elif t in quotes:
+            return [quote_, read(inport)]
         elif t is eof_object:
             raise SyntaxError("Unexpected EOF")
         else:
             return atom(t)
 
     t = next(inport)
+
     return eof_object if t is eof_object else _read(t)
 
 
@@ -252,6 +272,10 @@ def eval(x, env=global_env):
         elif x[0] == 'fn':  # (lambda (var*) exp)
             (_, exp) = x
             return Procedure(env, exp)
+        elif x[0] is quote_:
+            _, q = x
+            return q
+
         else:  # (proc exp*)
             exps = [eval(exp, env) for exp in x]
             proc = exps.pop(0)
@@ -292,6 +316,8 @@ def expand(x, toplevel=False):
             x = x + [None]  # (if t c) => (if t c None)
         require(x, len(x) == 4)
         return mapv(expand, x)
+    elif x[0] is quote_:
+        return x
     elif x[0] is def_ or x[0] is defmacro_:
         require(x, len(x) >= 3)
         _d, v, body = x[0], x[1], x[2:]
@@ -311,11 +337,11 @@ def expand(x, toplevel=False):
             return [expand(xi, toplevel) for xi in x]
 
     elif x[0] is fn_:  # (lambda (x) e1 e2)
-        require(x, len(x) >= 3)  # => (lambda (x) (begin e1 e2))
+        # require(x, len(x) >= 3)  # => (lambda (x) (begin e1 e2))
         body = x[1:]
 
         if all(isa(e, list) for e in body) and all(isa(e[0], list) for e in body):
-            exp = mapv(expand, body)
+            exp = mapv(lambda args, exp: [args, expand(exp)], *zip(*body))
         else:
             exp = [expand(body)]
         # require(x, (isa(vars, list) and all(isa(v, Symbol) for v in vars))
@@ -356,18 +382,40 @@ def expand_quasiquote(x):
         return [cons_, expand_quasiquote(x[0]), expand_quasiquote(x[1:])]
 
 
-# eval(parse('[defn add [. xs] [apply + xs]]'), global_env)
-eval(parse('''[defn add
-           [[xs] [add 0 xs]]
-           [[acc xs]
-            [if [= 0 [count xs]]
-                acc
-                [add [+ acc [first xs]]
-                     [rest xs]]]]]'''))
+def test():
+    pass
+    # eval(parse('''[defn add
+    #            [[xs] [add 0 xs]]
+    #            [[acc xs]
+    #             [if [= 0 [count xs]]
+    #                 acc
+    #                 [add [+ acc [first xs]]
+    #                      [rest xs]]]]]'''))
+    #
+    # eval(parse('[defn foo [x] x]'))
+    # eval(parse('[defn bar '
+    #            '      [[] 0] '
+    #            '      [[x] 1] '
+    #            '      [[x y] 2] '
+    #            '      [[x y z] 3]]'))
+    # eval(parse("""[defn baz [[a b]] a]"""))
+    # eval(parse('''[defn foo  [[a b] c] b]'''))
+    # eval(parse('''[foo [list [list 1 2] 3]]'''))
 
-# eval(parse('[add 0 [list 1 2 3]]'), global_env)
 
-eval(parse('[defn foo [x] x]'))
+def special_functions():
+    eval(parse('''
+    [def add +]
+    
+    
+    '''))
+
 
 if __name__ == '__main__':
-    repl()
+    special_functions()
+    if __debug__:
+        test()
+        repl(debug=True)
+    else:
+
+        repl()
