@@ -89,11 +89,11 @@ Arrity can be variadic!
 
 You can name your destructured items
 
-    $->  [defn bar [[a b c -as x]] [list a b c x]]                               
-    $->  [bar /[1 2 3 4]]
-    ;;=> [1, 2, 3, [2, 3, 4]]
+    $->  [defn foo [[a b c -as x]] [list a b c x]]
+    $->  [foo /[1 2 3 4]]
+    ;;=> [1, 2, 3, [1, 2, 3, 4]]
 
-     
+
 #### Roadmap
 
 * [x] Implement tail recursion

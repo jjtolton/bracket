@@ -20,6 +20,12 @@ def prestruct(parms, args):
             elif p[0] == '.':
                 return prestruct([p[1]], [a])
 
+            elif [x for x in p if x == 'as']:
+
+                *items, _, name = p
+                p = items
+                return prestruct([name], args) + prestruct([p], args)
+
             return prestruct(p[0], a[0]) + prestruct(p[1:], a[1:])
 
         if isa(p, set):
@@ -39,7 +45,9 @@ def prestruct(parms, args):
         return res
 
     elif isa(parms, list) and [x for x in parms if x == 'as']:
-        *items, _, name = parms
+
+        items = parms[:-2]
+        name = parms[-1]
         parms = items
         return prestruct(name, args) + prestruct(parms, args)
 
