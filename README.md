@@ -64,7 +64,7 @@ Go crazy with tail recursion!
     $->  [sum 0 [range 10000]]
     ;;=> 49995000
     
-Take advantage of variadic arguments!
+Take advantage of arrity-based dispatch!
 
     $->  [defn xsum 
            [[n]
