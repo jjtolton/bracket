@@ -19,3 +19,9 @@ quasiquote_, unquote_, unquotesplicing_ = mapv(Sym,
 append_, cons_, let_, cond_ = mapv(Sym,
 "append cons let cond".split())
 # @formatter:on
+class KeyWord(str):
+    def __repr__(self):
+        return f'-{super().__repr__()}'
+
+    def __str__(self):
+        return f'-{super().__str__()}'

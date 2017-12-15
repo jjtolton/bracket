@@ -84,8 +84,8 @@ Take advantage of arrity-based dispatch!
 * [x] List literals
 * [x] multi-arrity dispatch
 * [x] Implement destructuring _a la_ Clojure
-* [ ] Improved destructuring
-* [ ] Variadic arguments
+* [x] Variadic arguments
+* [x] Improved destructuring
 * [ ] Namespacing/modules
 * [ ] Native Python interop
 * [ ] Map literals

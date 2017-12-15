@@ -8,7 +8,7 @@ from naga import mapv, conj as cons
 
 from lib.destructure import destruct, prestruct
 from lib.macros import macro_table
-from lib.symbols import fn_, unquotesplicing_, append_, cons_
+from lib.symbols import fn_, unquotesplicing_, append_, cons_, KeyWord
 from lib.symbols import unquote_, defmacro_, Symbol, quote_, if_, def_, begin_, quasiquote_
 from lib.utils import to_string, isa
 
@@ -190,14 +190,6 @@ def repl(prompt='$-> ', inport=InPort(sys.stdin), out=sys.stdout, debug=False):
                 raise e
 
 
-class KeyWord(str):
-    def __repr__(self):
-        return f'-{super().__repr__()}'
-
-    def __str__(self):
-        return f'-{super().__str__()}'
-
-
 def atom(t):
     if t == '#t':
         return True
@@ -286,13 +278,13 @@ def eval(x, env=global_env):
 
             if isa(x, Proc):
                 x = proc.exp
-                if '.' in proc.parms:
-                    idx = proc.parms.index('.')
-                    exps = exps[:idx] + [exps[idx:]]
-                    parms = proc.parms[:idx] + proc.parms[idx + 1:]
-                    env = Env(parms, exps, proc.env)
-                else:
-                    env = Env(proc.parms, exps, proc.env)
+                # if '.' in proc.parms:
+                #     idx = proc.parms.index('.')
+                #     exps = exps[:idx] + [exps[idx:]]
+                #     parms = proc.parms[:idx] + proc.parms[idx + 1:]
+                #     env = Env(parms, exps, proc.env)
+                # else:
+                env = Env(proc.parms, exps, proc.env)
 
             else:
                 return proc(*exps)
