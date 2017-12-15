@@ -78,6 +78,15 @@ Take advantage of arrity-based dispatch!
     $->  [xsum 10000]
     ;;=> 49995000
 
+Arrity can be variadic!
+
+    $->  [defn foo 
+           [[a b] [add a b]]
+           [[a . b] [foo a [reduce add b]]]]
+    $->  [foo 1 2 3]
+    ;;=> 6
+
+
 #### Roadmap
 
 * [x] Implement tail recursion
@@ -88,6 +97,7 @@ Take advantage of arrity-based dispatch!
 * [x] Improved destructuring
 * [ ] Namespacing/modules
 * [ ] Native Python interop
+* [ ] User defined macros
 * [ ] Map literals
 * [ ] Export bracket to Python
 * [ ] Concurrency support
