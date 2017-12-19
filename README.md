@@ -36,6 +36,22 @@ Maybe try some fancier stuff!
           [add a b c]]
 	;;=> 14
 
+Even features vector binding expressions:
+
+    $->  [let [[a . b] /[1 2 3 4]] [list a b]]
+    ;;=> [1, [2, 3, 4]]
+    
+    $->  [let [[a . b] /[1 2 3 4]
+               c        [first b]
+               res      [add a c]] res]
+    ;;=> 3
+    $->  [let [[a b] /[1 2 3] 
+               [c d] [list [add a b]
+                           [* a b]]]
+          [list a b c d]]
+    ;;=> [1, 2, 3, 2]
+    
+
 **[bracket]** also supports assignments.
 
 	$->  [def name 'taco']
@@ -122,14 +138,17 @@ Access Python object methods with "`.`"
 * [x] Variadic arguments
 * [x] Improved destructuring
 * [ ] Namespacing/modules
-* [ ] Native Python interop  
-  * [x] py/ literal
-  * [x] `.` accessor
-  * [ ] python imports
+* [ ] Native Python interop
+  * [x] Python -> bracket interop    
+    * [x] py/ literal
+    * [x] `.` accessor
+    * [x] python imports
+  * [ ] bracket -> Python interop 
 * [ ] User defined macros
 * [ ] Map literals
 * [ ] iterator constructs ("`for`" special form)
-* [ ] better apply method
+* [x] better apply method
+* [x] better let destructuring
 * [ ] Export bracket to Python
 * [ ] Concurrency support
 * [ ] Useful stack traces

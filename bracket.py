@@ -1,16 +1,18 @@
 import io
 import re
 import sys
+import itertools
 from functools import reduce
 
 import naga
-from naga import mapv, conj as cons
+from naga import mapv, conj as cons, partition, append, drop, first, second
 
-from lib.destructure import destruct, prestruct
-from lib.macros import macro_table
-from lib.symbols import fn_, unquotesplicing_, append_, cons_, KeyWord, PyObject
+from lib.destructure import destructure
+from lib.macros import macro_table, let
+from lib.symbols import fn_, unquotesplicing_, append_, cons_, PyObject
+from lib.special_forms import KeyWord
 from lib.symbols import unquote_, defmacro_, Symbol, quote_, if_, def_, begin_, quasiquote_
-from lib.utils import to_string, isa
+from lib.utils import to_string, isa, ara
 
 
 class Env(dict):
@@ -22,11 +24,34 @@ class Env(dict):
         if isa(parms, Symbol):
             self.update({parms: list(args)})
         else:
-            self.update({k: v for k, v in naga.partition(2, prestruct(parms, args))})
-            # self.update(zip(parms, args))
+
+            def recursive_eval(x, env):
+                try:
+                    if isa(x, list):
+                        return [eval(xi, env) for xi in x]
+                except Exception as e:
+                    return x
+
+            bindings = partition(2, destructure(list(append(*itertools.zip_longest(parms, args)))))
+
+            for k, v in bindings:
+                try:
+                    self.update({k: eval(v, self)})
+                except Exception:
+                    self.update({k: v})
+
+                    # (self.update({k: eval(v, self)}) if isa(v, list) else
+                    #  self.update({k: v}))
+
+                    # self.update({k: v for k, v in })
+                    # self.update(zip(parms, args))
 
     def find(self, var):
         """Find the innermost Env where var appears."""
+        if '/' in var:
+            n, m = var.split('/')
+            return self.find(n).find(m)
+
         if var in self:
             return self
         elif self.outer is None:
@@ -38,11 +63,11 @@ class Env(dict):
 class Proc:
     "A user-defined Scheme procedure."
 
-    def __init__(self, parms, exp, env, parent):
-        self.parms, self.exp, self.env, self.parent = parms, exp, env, parent
+    def __init__(self, parms, exp, env):
+        self.parms, self.exp, self.env = parms, [begin_, *exp], env
 
     def __call__(self, *args):
-        self.exp = destruct(self.parms, list(args), self.exp)
+        self.exp = let(zip(self.parms, list(args)), self.exp)
         return eval(self.exp, Env(self.parms, args, self.env))
 
 
@@ -51,9 +76,10 @@ class Procedure:
         self.procs = []
         self.variadic = None
         for form in forms:
-            if '.' in form[0]:
-                self.variadic = Proc(*form, *[env, self])
-            self.procs.append(Proc(*form, *[env, self]))
+            args, *exps = form
+            if '.' in args:
+                self.variadic = Proc(args, exps, env)
+            self.procs.append(Proc(args, exps, env))
 
             # self.procs = [Proc(*(*form, *[env])) for form in forms]
 
@@ -67,6 +93,14 @@ class Procedure:
         else:
             return self.variadic
 
+            # def apply(self, *x):
+            #     lst = x[-1]
+            #     if isa(lst, list):
+            #         a = x[:-1]
+            #         y = a + lst
+            #         return self(*y)
+            #
+            #     return self(*x)
 
 
 def add_globals(self):
@@ -90,7 +124,6 @@ def add_globals(self):
         'list': lambda *x: list(x), 'list?': lambda x: isa(x, list),
         'null?': lambda x: x == [], 'symbol?': lambda x: isa(x, Symbol),
         'boolean?': lambda x: isa(x, bool),
-        'apply': lambda proc, l: proc(*l),
         'symbol': lambda x: Symbol(x),
         'count': len,
         # 'eval': lambda x: eval(expand(x)),
@@ -110,9 +143,63 @@ def add_globals(self):
         'pformat': lambda s, *args: print(s.format(*args)),
         'display': lambda x, port=sys.stdout: port.write(x if isa(x, str) else to_string(x)),
         'newline': lambda: print(),
-        '.': lambda k, v: getattr(k, v)
+        '.': lambda k, v: getattr(k, v),
+        'dropv': lambda *args: list(drop(*args)),
     })
     self.update(vars(naga))
+
+    def apply(f, *x):
+        lst = x[-1]
+        if isa(lst, (list, tuple, str)):
+            a = list(x[:-1])
+            args = a + list(lst)
+        else:
+            args = x
+        return f(*args)
+
+    self.update({'apply': apply})
+
+    def import_(n):
+        package = Env(name=n)
+        for k, v in vars(__import__(n, globals(), locals())).items():
+            package[k] = v
+        self[n] = package
+
+    self.update({'import': import_})
+
+    def require(n):
+
+        if isa(n, (Symbol, str)):
+            fname = f'{n}.br'
+            new_env = Env(name=n, outer=global_env)
+            with open(fname) as f:
+                eval(parse(f.read()), new_env)
+            self[n] = new_env
+        if isa(n, list):
+            if n[0] == 'from':
+                name = f'{n[1]}.br'
+                items = n[2]
+            else:
+                name = f'{n[0]}.br'
+                items = n[1]
+            if isa(items, list):
+                temp_env = Env(outer=global_env)
+                with open(name) as f:
+                    contents = f.read()
+                    eval(parse(contents), temp_env)
+
+                    for item in items:
+                        global_env[item] = temp_env[item]
+            if items == '*':
+                temp_env = Env(outer=global_env)
+                with open(name) as f:
+                    contents = f.read()
+                    eval(parse(contents), temp_env)
+
+                    for k in temp_env:
+                        global_env[k] = temp_env[k]
+
+    self.update({'require': require})
     return self
 
 
@@ -216,7 +303,6 @@ def atom(t):
     if t.startswith('py/'):
         return PyObject(t[3:])
 
-
     return Symbol(t)
 
 
@@ -249,7 +335,7 @@ def read(inport: type(InPort)):
 
 def parse(x):
     if isa(x, str):
-        return parse(InPort(io.StringIO(x)))
+        return parse(InPort(io.StringIO(f'[begin {x}]')))
     data = read(x)
     return expand(data)
 
@@ -258,7 +344,12 @@ def eval(x, env=global_env):
     "Evaluate an expression in an environment."
     while True:
         if isa(x, Symbol):  # variable reference
-            return env.find(x)[x]
+            if '/' in x:
+                n, m = x.split('/')
+                return env.find(n)[n][m]
+            else:
+                return env.find(x)[x]
+
         elif not isa(x, list):  # constant literal
             return x
         elif x[0] == 'if':  # (if test conseq alt)
@@ -268,21 +359,38 @@ def eval(x, env=global_env):
             (_, var, exp) = x
             env[var] = eval(exp, env)
             return None
-        elif x[0] == 'fn':  # (lambda (var*) exp)
+        elif x[0] == begin_:
+            for exp in x[1:-1]:
+                eval(exp, env)
+            x = x[-1]
+
+        elif x[0] == 'quote':
             (_, exp) = x
+            return exp
+        elif x[0] == 'fn':  # (lambda (var*) exp)
+            if len(x) > 2:
+                (_, *exp) = x
+                exp = [list(exp)]
+            else:
+                (_, exp) = x
             return Procedure(env, exp)
         elif x[0] is quote_:
             _, q = x
             return q
 
         else:  # (proc exp*)
-            if x[0] == '.':
+
+            if x[0] in ('.', 'import'):
                 x[-1] = str(x[-1])
+
+            if x[0] == 'require':
+                if isa(x[-1], list):  # [require stdlib *]
+                    x[-1] = [quote_, x[-1]]
+                else:
+                    x[-1] = str(x[-1])
 
             exps = [eval(exp, env) for exp in x]
             proc = exps.pop(0)
-
-
 
             if isa(proc, Procedure):
                 x = proc.proc(*exps)
@@ -324,14 +432,14 @@ def expand(x, toplevel=False):
         return x
     elif x[0] is def_ or x[0] is defmacro_:
         require(x, len(x) >= 3)
-        _d, v, body = x[0], x[1], x[2:]
-        exp = expand(x[2])
-        if _d is defmacro_:
-            require(x, toplevel, "define-macro only allowed at top level")
-            proc = eval(exp)
-            require(x, callable(proc), "macro must be a procedure")
-            macro_table[v] = proc  # (define-macro v proc)
-            return None  # => None; add v:proc to macro_table
+        _d, v, body = x[0], x[1], x[2]
+        exp = expand(body)
+        # if _d is defmacro_:
+        #     require(x, toplevel, "define-macro only allowed at top level")
+        #     proc = eval(exp)
+        #     require(x, callable(proc), "macro must be a procedure")
+        #     macro_table[v] = proc  # (define-macro v proc)
+        #     return None  # => None; add v:proc to macro_table
         return [def_, v, exp]
 
     elif x[0] is begin_:
@@ -340,17 +448,21 @@ def expand(x, toplevel=False):
         else:
             return [expand(xi, toplevel) for xi in x]
 
-    elif x[0] is fn_:  # (lambda (x) e1 e2)
-        # require(x, len(x) >= 3)  # => (lambda (x) (begin e1 e2))
+    elif x[0] == fn_:  # (lambda (x) e1 e2)
         body = x[1:]
 
-        if all(isa(e, list) for e in body) and all(isa(e[0], list) for e in body):
-            exp = mapv(lambda args, exp: [args, expand(exp)], *zip(*body))
+        # body can either be of simple style [fn [x] x] or [fn [x] [f x]] or [fn [x] [f x] [g x]]
+        # compound style                     [fn [[a] a]] [[a b] ...] [[a b c] ... ]]
+
+        # compound style
+        if ara(body, list) and all(isa(e, list) for e in body) and all(isa(e[0], list) for e in body):
+            exp = [[args, [begin_, *mapv(expand, xi)]] for args, *xi in body]
+
+        # simple style
         else:
-            exp = [expand(body)]
-        # require(x, (isa(vars, list) and all(isa(v, Symbol) for v in vars))
-        #         or isa(vars, Symbol), "illegal lambda argument list")
-        # exp = body[0] if len(body) == 1 else [begin_] + body
+            args, *xi = body
+            exp = [[args, [begin_, *mapv(expand, xi)]]]
+
         return [fn_, exp]
 
     elif x[0] is quasiquote_:  # `x => expand_quasiquote(x)
@@ -386,40 +498,16 @@ def expand_quasiquote(x):
         return [cons_, expand_quasiquote(x[0]), expand_quasiquote(x[1:])]
 
 
-def test():
-    pass
-    # eval(parse('''[defn add
-    #            [[xs] [add 0 xs]]
-    #            [[acc xs]
-    #             [if [= 0 [count xs]]
-    #                 acc
-    #                 [add [+ acc [first xs]]
-    #                      [rest xs]]]]]'''))
-    #
-    # eval(parse('[defn foo [x] x]'))
-    # eval(parse('[defn bar '
-    #            '      [[] 0] '
-    #            '      [[x] 1] '
-    #            '      [[x y] 2] '
-    #            '      [[x y z] 3]]'))
-    # eval(parse("""[defn baz [[a b]] a]"""))
-    # eval(parse('''[defn foo  [[a b] c] b]'''))
-    # eval(parse('''[foo [list [list 1 2] 3]]'''))
-
-
 def special_functions():
-    eval(parse('''
-    [def add +]
-    
-    
-    '''))
+    try:
+        eval(parse('[require [stdlib *]]]'))
+    except FileNotFoundError:
+        print('cannot find stdlib')
 
 
 if __name__ == '__main__':
     special_functions()
     if __debug__:
-        test()
         repl(debug=True)
     else:
-
         repl()

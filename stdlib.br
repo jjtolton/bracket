@@ -1,0 +1,11 @@
+[def add +]
+
+[defn sum [. xs] [py/sum xs]]
+
+[defn hashmap
+           [[xs]
+            [if [= 0 [count xs]]
+                [py/dict]
+                [let [[k v . xs] xs]
+                     [assoc [hashmap xs] k v]]]]
+           [[. xs] [hashmap xs]]]

@@ -1,6 +1,12 @@
-from lib.macros import let
-from lib.symbols import Symbol, KeyWord
-from lib.utils import isa
+from naga import partition, first, second, rest, filterv
+
+from lib.symbols import Symbol
+from lib.utils import isa, AutoGenSym
+
+
+# def destruct(parms, args, exps):
+#     destruct = prestruct(parms, args)
+#     return let(destruct, exps)
 
 
 def prestruct(parms, args):
@@ -58,9 +64,51 @@ def prestruct(parms, args):
         return prestruct(parms[:1], args[:1]) + prestruct(parms[1:], args[1:])
 
 
-def destruct(parms, args, exps):
-    destruct = prestruct(parms, args)
-    return let(destruct, exps)
+def destructure(bindings, ag=None):
+
+    if len(bindings) == 0:
+        return []
+
+    ag = ag or AutoGenSym()
+
+    def vector_bindings(b, v):
+        res = []
+        if isa(b, (Symbol, str)):
+            res.extend([b, v])
+        if isa(b, list):
+            nb = ag('vec_')
+            res.extend([nb, v])
+
+            if [x for x in b if x == '.']:
+                *bs, _, n = b
+                res.extend(destructure([ax for bx in [[x, [Symbol('get'), nb, i]] for i, x in enumerate(bs)] for ax in bx], ag))
+                res.extend(destructure([n, [Symbol('dropv'), len(bs), nb]]))
+            else:
+                res.extend(destructure([ax for bx in [[x, [Symbol('get'), nb, i]] for i, x in enumerate(b)] for ax in bx], ag))
+        return res
+
+    def symbol_binding(b, v):
+        return [b, v]
+
+    b = first(bindings)
+    v = second(bindings)
+    nbindings = rest(rest(bindings))
+
+    if b == '.':
+        return destructure([first(nbindings), filterv(None, [v, *nbindings[1:]])])
+
+    if isa(b, list):
+        return vector_bindings(b, v) + destructure(nbindings, ag)
+
+    if isa(b, (Symbol, str)):
+        return symbol_binding(b, v) + destructure(nbindings, ag)
+
+
+
+
+
+
+
 
 
 def tests():
@@ -76,8 +124,13 @@ def tests():
     # assert (destruct([['a', 'b'], 'c'], [[1, 2], 3], 'b') ==
     #         [['fn', ['a'], [['fn', ['b'], [['fn', ['c'], 'b'], 3]], 2]], 1])
 
-    print(prestruct(['a', '.', 'b'], [1, 2, 3, 4, 5]))
-    print(prestruct([['a', '.', 'b']], [[1, 2, 3, 4, 5]]))
+    # print(prestruct(['a', '.', 'b'], [1, 2, 3, 4, 5]))
+    # print(prestruct([['a', '.', 'b']], [[1, 2, 3, 4, 5]]))
+
+    print(destructure(['a', 1]))
+    print(destructure([['a', 'b'], [1, 2]]))
+    print(destructure([[['a', 'b']], [[1, 2]]]))
+    print(destructure([['a', '.', 'b'], [1, 2]]))
 
 
 if __name__ == '__main__':

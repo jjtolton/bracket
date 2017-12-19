@@ -1,7 +1,12 @@
 from naga import partition
 
-from lib.symbols import def_, fn_
+from lib.destructure import destructure
+from lib.symbols import def_, fn_, quote_
 from lib.utils import isa
+
+
+def quote(sym):
+    return [quote_, sym]
 
 
 def defn(*args):
@@ -17,16 +22,32 @@ def defn(*args):
 
 
 def let(forms, exps):
-    forms = (x for x in list(partition(2, forms))[::-1])
+    forms = destructure(forms)
 
     def _let(forms, exps):
         for a, b in forms:
             return _let(forms, [['fn', [a], exps], b])
         return exps
 
-    res = _let(forms, exps)
-    return res
+    nforms = iter(list(partition(2, destructure(forms)))[::-1])
+    return _let(nforms, exps)
+
+
+
+
+
 
 
 macro_table = {'defn': defn,
+               'quote': quote,
                'let': let}  ## More macros can go here
+
+
+def tests():
+    from bracket import parse
+
+    print(str(parse('[let [[a b] /[1 2]] a]')).replace("'", '').replace(',', ''))
+
+
+if __name__ == '__main__':
+    tests()
