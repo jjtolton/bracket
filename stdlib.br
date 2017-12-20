@@ -9,3 +9,23 @@
                 [let [[k v . xs] xs]
                      [assoc [hashmap xs] k v]]]]
            [[. xs] [hashmap xs]]]
+
+
+[defn into [[x] [into [list] x]]
+         [[a b] [if [= 0 [count b]]
+                    a
+                    [into [conj a [first b]]
+                          [rest b]]]]]
+
+[defn butlast [x]
+      [[. x __getitem__] [py/slice 0 [py/int -1]]]]
+
+[defn pformat [s . xs]
+      [apply [. s format] xs]]
+
+[defn assert
+    [[exp res] [let [msg [pformat 'expecting {}, got {}' exp res]]
+                    [assert exp res msg]]]
+    [[exp res msg] [if [= exp res]
+                       #t
+                       [begin [print msg] #f]]]]
