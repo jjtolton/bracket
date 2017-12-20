@@ -1,18 +1,18 @@
 import io
+import itertools
 import re
 import sys
-import itertools
 from functools import reduce
 
 import naga
-from naga import mapv, conj as cons, partition, append, drop, first, second
+from naga import mapv, conj as cons, partition, append, drop
 
 from lib.destructure import destructure
 from lib.macros import macro_table, let
-from lib.symbols import fn_, unquotesplicing_, append_, cons_, PyObject
 from lib.special_forms import KeyWord
+from lib.symbols import fn_, unquotesplicing_, append_, cons_, PyObject
 from lib.symbols import unquote_, defmacro_, Symbol, quote_, if_, def_, begin_, quasiquote_
-from lib.utils import to_string, isa, ara
+from lib.utils import to_string, isa, ara, munge
 
 
 class Env(dict):
@@ -503,6 +503,7 @@ def special_functions():
         eval(parse('[require [stdlib *]]]'))
     except FileNotFoundError:
         print('cannot find stdlib')
+
 
 
 if __name__ == '__main__':

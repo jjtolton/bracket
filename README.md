@@ -137,20 +137,23 @@ Access Python object methods with "`.`"
 * [x] Implement destructuring _a la_ Clojure
 * [x] Variadic arguments
 * [x] Improved destructuring
-* [ ] Namespacing/modules
-* [ ] Native Python interop
+* [x] Namespacing/modules
+* [x] Native Python interop
   * [x] Python -> bracket interop    
     * [x] py/ literal
     * [x] `.` accessor
     * [x] python imports
-  * [ ] bracket -> Python interop 
+  * [x] bracket -> Python interop
+    * [ ] bracket -> Python compiler
+    * [ ] optional (bonus) directly import from .br files(??) 
+
+* [x] better apply method
+* [x] better let destructuring
 * [ ] User defined macros
 * [ ] Map literals
 * [ ] iterator constructs ("`for`" special form)
-* [x] better apply method
-* [x] better let destructuring
-* [ ] Export bracket to Python
 * [ ] Concurrency support
+* [ ] Beef up stdlib
 * [ ] Useful stack traces
 * [ ] Editor support
 * [ ] Export bracket to Clojure (maybe?)
