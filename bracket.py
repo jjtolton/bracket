@@ -12,7 +12,7 @@ from lib.macros import macro_table, let
 from lib.special_forms import KeyWord
 from lib.symbols import fn_, unquotesplicing_, append_, cons_, PyObject
 from lib.symbols import unquote_, defmacro_, Symbol, quote_, if_, def_, begin_, quasiquote_
-from lib.utils import to_string, isa, ara, munge
+from lib.utils import to_string, isa, ara
 
 
 class Env(dict):
@@ -67,7 +67,7 @@ class Proc:
         self.parms, self.exp, self.env = parms, [begin_, *exp], env
 
     def __call__(self, *args):
-        self.exp = let(zip(self.parms, list(args)), self.exp)
+        self.exp = let(list(zip(self.parms, list(args))), self.exp)
         return eval(self.exp, Env(self.parms, args, self.env))
 
 
@@ -105,10 +105,8 @@ class Procedure:
 
 def add_globals(self):
     "Add some Scheme standard procedures."
-    import math, cmath, operator as op
+    import operator as op
 
-    self.update(vars(math))
-    self.update(vars(cmath))
     self.update({
         'exit': lambda: sys.exit("Bye!"),
         '+': lambda *args: sum(args) if args else 1,
@@ -126,7 +124,7 @@ def add_globals(self):
         'boolean?': lambda x: isa(x, bool),
         'symbol': lambda x: Symbol(x),
         'count': len,
-        # 'eval': lambda x: eval(expand(x)),
+        'eval': lambda x: eval(expand(x)),
         # 'load': lambda fn: load(fn),
 
         # 'call/cc': callcc,
@@ -160,10 +158,23 @@ def add_globals(self):
     self.update({'apply': apply})
 
     def import_(n):
-        package = Env(name=n)
-        for k, v in vars(__import__(n, globals(), locals())).items():
-            package[k] = v
-        self[n] = package
+        if isa(n, Symbol):
+            package = Env(name=n)
+            for k, v in vars(__import__(n, globals(), locals())).items():
+                package[k] = v
+            self[n] = package
+        if isa(n, list):
+            name, *args = n
+            import__ = __import__(name, globals(), locals())
+            if len(args) == 1 and args[0] == '*':
+                for k, v in vars(import__).items():
+                    global_env[k] = v
+            else:
+                for arg in args:
+                    global_env[arg] = import__[arg]
+
+
+
 
     self.update({'import': import_})
 
@@ -210,20 +221,6 @@ eof_object = Symbol('#<eof-object>')  # Note: uninterned; can't be read
 
 class InPort(object):
     "An input port. Retains a line of chars."
-    # tokenizer = re.compile(r"""
-    #                 \s*(,@                  |  # unquote-splice
-    #                     [('`,)]             |  # lparen, quote, quasiquote, unquote, rparen
-    #                     "(?:[\\].|[^\\"])*" |  #   multiline string... matches anything between quotes that is
-    #                                            ##  \. ---> [\\]. <--- and anything that is not a slash or quote
-    #                                            ##     ---> [^\\"]
-    #                     ;.*                 |  # comments
-    #                     [^\s('"`,;)]*)         # symbols -- match anything that is NOT special character
-    #                     |
-    #
-    #                     (.*) # capture the rest of the string
-    #
-    #                     """,
-    #                        flags=re.X)
     tokenizer = re.compile(r"""\s*([~@]               |
                                    [\[/`,\]]          |    # capture [ " ` , ] tokens
                                    '(?:[\\].|[^\\'])*'|    # strings
@@ -286,7 +283,7 @@ def atom(t):
     if t == '#f':
         return False
 
-    if t.isdecimal():
+    if t.isdecimal() or t.startswith('-') and t[1:].isdecimal():
         return int(t)
 
     try:
@@ -363,6 +360,10 @@ def eval(x, env=global_env):
             for exp in x[1:-1]:
                 eval(exp, env)
             x = x[-1]
+        elif x[0] == defmacro_:
+            _, v, body = x
+            macro_table[v] = eval(body)
+            return None
 
         elif x[0] == 'quote':
             (_, exp) = x
@@ -380,10 +381,10 @@ def eval(x, env=global_env):
 
         else:  # (proc exp*)
 
-            if x[0] in ('.', 'import'):
+            if x[0] == '.':
                 x[-1] = str(x[-1])
 
-            if x[0] == 'require':
+            if x[0] in ('require', 'import'):
                 if isa(x[-1], list):  # [require stdlib *]
                     x[-1] = [quote_, x[-1]]
                 else:
@@ -440,7 +441,7 @@ def expand(x, toplevel=False):
         #     require(x, callable(proc), "macro must be a procedure")
         #     macro_table[v] = proc  # (define-macro v proc)
         #     return None  # => None; add v:proc to macro_table
-        return [def_, v, exp]
+        return [_d, v, exp]
 
     elif x[0] is begin_:
         if len(x) == 1:
@@ -455,8 +456,13 @@ def expand(x, toplevel=False):
         # compound style                     [fn [[a] a]] [[a b] ...] [[a b c] ... ]]
 
         # compound style
-        if ara(body, list) and all(isa(e, list) for e in body) and all(isa(e[0], list) for e in body):
+        # @formatter:off
+        if (ara(body, list)                 and
+            all(isa(e, list) for e in body) and
+            len(body[0]) > 0                and
+            all(isa(e[0], list) for e in body)):
             exp = [[args, [begin_, *mapv(expand, xi)]] for args, *xi in body]
+        # @formatter:on
 
         # simple style
         else:
@@ -470,7 +476,10 @@ def expand(x, toplevel=False):
         return expand_quasiquote(x[1])
 
     elif isa(x[0], Symbol) and x[0] in macro_table:
-        return expand(macro_table[x[0]](*x[1:]), toplevel)  # (m arg...)
+        name = x[0]
+        body = x[1:]
+        res = expand(macro_table[name](*body), toplevel)
+        return res  # (m arg...)
 
     # elif isa(x[0], list):
     #     parms, *body = x
@@ -500,10 +509,12 @@ def expand_quasiquote(x):
 
 def special_functions():
     try:
+        eval(parse('[import [math *]]'))
+        eval(parse('[import [cmath *]]'))
         eval(parse('[require [stdlib *]]]'))
+
     except FileNotFoundError:
         print('cannot find stdlib')
-
 
 
 if __name__ == '__main__':
