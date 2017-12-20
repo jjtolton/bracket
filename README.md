@@ -9,6 +9,10 @@ Heavily "inspired by" [stolen from] Peter Norvig's [articles](http://norvig.com/
 * Libraries:
 	* naga
 	
+#### Examples
+
+Please check [here](https://github.com/HiImJayHireMe/Now_Thats_A_Portfolio/tree/master/bracket_work) examples.
+	
 #### Quickstart
 
     git clone https://github.com/HiImJayHireMe/bracket
