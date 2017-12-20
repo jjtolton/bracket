@@ -95,7 +95,8 @@ def destructure(bindings, ag=None):
     nbindings = rest(rest(bindings))
 
     if b == '.':
-        return destructure([first(nbindings), filterv(None, [v, *nbindings[1:]])])
+        # TODO: trouble spot
+        return destructure([first(nbindings), [v, *nbindings[1:]]])
 
     if isa(b, list):
         return vector_bindings(b, v) + destructure(nbindings, ag)
