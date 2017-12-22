@@ -102,8 +102,6 @@ def import_(global_env, imports, name=None):
 
 
 def require_(global_env, n, name=None):
-
-
     if isa(n, (Symbol, str)):
         if name is None:
             name = n
