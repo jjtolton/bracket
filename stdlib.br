@@ -1,7 +1,6 @@
 [import lib.stdlib lib]
-[import [lib.stdlib add mul sub div gt lt lte gte exit cons append symbol
-                    apply pformat conj first rest count get dropv drop assoc]]
-
+[import [lib.stdlib add mul sub div gt lt lte gte exit cons symbol pformat dropv count apply]]
+[import [naga append conj first last rest get drop assoc mapv]]
 
 [def < lt]
 [def > gt]
@@ -59,12 +58,15 @@
                       [into [conj a [first b]]
                             [rest b]]]]]
 
+[defn print [[x]      [py/print x]]
+            [[x . xs] [apply py/print x xs]]]
+
 ;[defmacro and
 ;   [[] #t]
 ;   [[x] x]
 ;   [[x . xs]
 ;    [print [list x xs]]
-;    [if [empty? xs]
+;    `[if [empty? xs]
 ;         x
 ;         [if [false? x]
 ;              x

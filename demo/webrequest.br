@@ -1,0 +1,12 @@
+[import requests] ;; Python requests module
+[import bs4]      ;; Python beautiful soup module
+
+[defn run []
+    [let [url       'http://www.google.com'
+          req       [requests/get url]
+          content   [. req content]
+          make-soup [fn [content] [bs4/BeautifulSoup content 'html.parser']]
+          soup      [make-soup content]
+          find      [. soup find]
+          a-tag     [find 'a']]
+      [print a-tag]]]

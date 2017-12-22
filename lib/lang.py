@@ -101,15 +101,18 @@ def import_(global_env, imports, name=None):
                 global_env[arg] = vars(import__)[arg]
 
 
-def require_(global_env, n):
+def require_(global_env, n, name=None):
 
 
     if isa(n, (Symbol, str)):
+        if name is None:
+            name = n
+
         fname = f'{n}.br'
         new_env = Env(name=n, outer=global_env)
         with open(fname) as f:
             eval(parse(f.read()), new_env)
-        global_env[n] = new_env
+        global_env[name] = new_env
     if isa(n, list):
         if n[0] == 'from':
             name = f'{n[1]}.br'
@@ -292,7 +295,7 @@ def eval(x, env=global_env, toplevel=False):
         else:  # (proc exp*)
 
             if x[0] == '.':
-                x[-1] = [quote_, str(x[-1])]
+                x[-1] = str(x[-1])
 
             if x[0] in ('require', 'import'):
                 if isa(x[-1], list):  # [require stdlib *]
