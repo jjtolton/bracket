@@ -1,27 +1,41 @@
-[def add +]
-
-[defn sum [. xs] [py/sum xs]]
-
-[defn hashmap
-           [[xs]
-            [if [= 0 [count xs]]
-                [py/dict]
-                [let [[k v . xs] xs]
-                     [assoc [hashmap xs] k v]]]]
-           [[. xs] [hashmap xs]]]
+[import lib.stdlib lib]
+[import [lib.stdlib add mul sub div gt lt lte gte exit cons append symbol
+                    apply pformat conj first rest count get dropv drop assoc]]
 
 
-[defn into [[x] [into [list] x]]
-         [[a b] [if [= 0 [count b]]
-                    a
-                    [into [conj a [first b]]
-                          [rest b]]]]]
+[def < lt]
+[def > gt]
+[def <= lte]
+[def >= gte]
+[def eq? lib/eqq]
+[def = lib/eq]
+[def != lib/neq]
 
-[defn butlast [x]
-      [[. x __getitem__] [py/slice 0 [py/int -1]]]]
+[def empty? lib/empty]
 
-[defn pformat [s . xs]
-      [apply [. s format] xs]]
+[def false? lib/false_]
+
+[def not lib/not_]
+
+[def list? lib/listp]
+
+[def null? lib/nullp]
+
+[def symbol? lib/symbolp]
+
+[def list lib/list_]
+
+[def to-list lib/to_list]
+
+[def bool? lib/boolean]
+
+[def bool py/bool]
+
+[def range py/range]
+
+[def . py/getattr]
+
+[defn butlast [x] [[. x __getitem__] [py/slice 0 -1]]]
 
 [defn assert
     [[exp res] [let [msg [pformat 'expecting {}, got {}' exp res]]
@@ -29,3 +43,29 @@
     [[exp res msg] [if [= exp res]
                        #t
                        [begin [print msg] #f]]]]
+
+
+[defn hashmap [[] [py/dict]]
+              [[. xs] [hashmap xs]]
+              [[xs] [if [empty? xs]
+                        [hashmap]
+                        [let [[k v . xs] xs]
+                              [assoc [hashmap xs] k v]]]]]
+
+[defn into [[]    []]
+           [[x]   [into [py/list] x]]
+           [[a b] [if [empty? b]
+                      a
+                      [into [conj a [first b]]
+                            [rest b]]]]]
+
+;[defmacro and
+;   [[] #t]
+;   [[x] x]
+;   [[x . xs]
+;    [print [list x xs]]
+;    [if [empty? xs]
+;         x
+;         [if [false? x]
+;              x
+;              [apply and xs]]]]]

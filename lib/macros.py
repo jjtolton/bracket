@@ -24,7 +24,8 @@ def defn(*args):
 def let(forms, exps):
     try:
         forms = destructure(forms)
-    except IndexError:
+    except IndexError as e:
+        print(f'hmmm: {e}')
         forms = destructure([a for b in forms for a in b])
 
     def _let(forms, exps):
@@ -34,6 +35,7 @@ def let(forms, exps):
 
     nforms = iter(list(partition(2, destructure(forms)))[::-1])
     return _let(nforms, exps)
+
 
 def and_(*args):
     if len(args) == 1:
@@ -56,4 +58,3 @@ macro_table = {'defn': defn,
                'or': or_,
                'quote': quote,
                'let': let}  ## More macros can go here
-

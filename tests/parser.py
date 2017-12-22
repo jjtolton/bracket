@@ -1,6 +1,7 @@
 import unittest
 
-from bracket import parse, Symbol, Definition, Procedure
+from bracket import Symbol, Definition
+from lib.lang import parse, Procedure
 
 
 class ParseTest(unittest.TestCase):

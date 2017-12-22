@@ -1,11 +1,12 @@
 import bracket
+import lib.lang
 
-bracket.special_functions()
-global_env = bracket.global_env
+lib.lang.special_functions()
+global_env = lib.lang.global_env
 
 
 def loads(s, env=global_env):
-    return bracket.eval(bracket.parse(s), env)
+    return lib.lang.eval(lib.lang.parse(s), env)
 
 
 def brfn(env, s, *args):
@@ -15,7 +16,7 @@ def brfn(env, s, *args):
 
 def br2py(namespace, out=None):
     out = out or namespace.replace('.br', '') + '.py'
-    bracket.special_functions()
+    lib.lang.special_functions()
     env = bracket.add_globals(bracket.Env())
     env['require'](namespace)
     # stdnamespace = bracket.add_globals(bracket.Env())

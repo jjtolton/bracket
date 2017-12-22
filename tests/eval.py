@@ -1,6 +1,6 @@
 import unittest
 
-from bracket import eval, parse
+from lib.lang import parse, eval
 
 
 class EvalTest(unittest.TestCase):
