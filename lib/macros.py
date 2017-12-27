@@ -1,6 +1,6 @@
-from naga import partition
+from naga import partition, mapv
 
-from lib.destructure import destructure
+from lib.destructure import destruct
 from lib.symbols import def_, fn_, quote_, if_, Symbol, let_
 from lib.utils import isa
 
@@ -22,22 +22,24 @@ def defn(*args):
 
 
 def let(forms, exps):
-    try:
-        forms = destructure(forms)
-    except IndexError as e:
-        print(f'hmmm: {e}')
-        forms = destructure([a for b in forms for a in b])
+    forms = mapv(list, partition(2, forms))
+    return _let(forms, exps)
 
-    def _let(forms, exps):
+
+def _let(forms, exps):
+    forms = destruct(*zip(*forms))[::-1]
+
+    def _let_(forms, exps):
         for a, b in forms:
-            return _let(forms, [['fn', [a], exps], b])
+            return _let_(forms, [['fn', [a], exps], b])
         return exps
 
-    nforms = iter(list(partition(2, destructure(forms)))[::-1])
-    return _let(nforms, exps)
+    return _let_(iter(forms), exps)
 
 
 def and_(*args):
+    if len(args) == 0:
+        return True
     if len(args) == 1:
         return args[0]
     return [if_, args[0],
@@ -46,6 +48,8 @@ def and_(*args):
 
 
 def or_(*args):
+    if len(args) == 0:
+        return True
     if len(args) == 1:
         return args[0]
     return [if_, args[0],

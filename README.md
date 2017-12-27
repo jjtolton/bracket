@@ -148,11 +148,12 @@ Access Python object methods with "`.`"
     * [x] `.` accessor
     * [x] python imports
   * [x] bracket -> Python interop
-    * [ ] bracket -> Python compiler
+    * [x] bracket -> Python compiler
     * [ ] optional (bonus) directly import from .br files(??) 
 
 * [x] better apply method
 * [x] better let destructuring
+* [ ] better interpreter experience
 * [ ] User defined macros
 * [ ] Map literals
 * [ ] iterator constructs ("`for`" special form)

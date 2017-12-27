@@ -1,6 +1,6 @@
 [import lib.stdlib lib]
 [import [lib.stdlib add mul sub div gt lt lte gte exit cons symbol pformat dropv count apply]]
-[import [naga append conj first last rest get drop assoc mapv]]
+[import [naga append conj first last rest get drop assoc mapv partition]]
 
 [def < lt]
 [def > gt]
@@ -37,19 +37,15 @@
 [defn butlast [x] [[. x __getitem__] [py/slice 0 -1]]]
 
 [defn assert
-    [[exp res] [let [msg [pformat 'expecting {}, got {}' exp res]]
-                    [assert exp res msg]]]
+    [[exp res]     [let [msg [pformat 'expecting {}, got {}' exp res]]
+                     [assert exp res msg]]]
     [[exp res msg] [if [= exp res]
                        #t
                        [begin [print msg] #f]]]]
 
 
 [defn hashmap [[] [py/dict]]
-              [[. xs] [hashmap xs]]
-              [[xs] [if [empty? xs]
-                        [hashmap]
-                        [let [[k v . xs] xs]
-                              [assoc [hashmap xs] k v]]]]]
+          [[. xs] [py/dict [partition 2 xs]]]]
 
 [defn into [[]    []]
            [[x]   [into [py/list] x]]

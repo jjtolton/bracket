@@ -1,6 +1,6 @@
 import sys
 
-from lib.lang import eof_object, parse, InPort, global_env, eval, expand, special_functions
+from lib.lang import eof_object, parse, InPort, global_env, eval, special_functions
 from lib.utils import to_string
 
 

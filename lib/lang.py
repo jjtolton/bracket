@@ -2,9 +2,10 @@ import io
 import re
 from functools import partial
 
-from naga import partition, itertools, append, mapv
-from lib.destructure import destructure
-from lib.macros import let, defn, macro_table
+from naga import mapv, partition
+
+from lib.destructure import destruct
+from lib.macros import defn, macro_table, _let
 from lib.special_forms import KeyWord
 from lib.stdlib import div
 from lib.symbols import Symbol, PyObject, quote_, quasiquote_, unquote_, unquotesplicing_, begin_, if_, def_, defmacro_, \
@@ -17,6 +18,7 @@ class InPort(object):
     tokenizer = re.compile(r"""\s*([~@]               |
                                    [\[/`,\]]          |    # capture [ " ` , ] tokens
                                    '(?:[\\].|[^\\'])*'|    # strings
+                                     {.*?}            |
                                    ;.*|                    # single line comments
                                    [^\s\['"`,;\]]*)        # match everything that is NOT a special character
                                    (.*)                    # match the rest of the string""",
@@ -55,13 +57,21 @@ class Env(dict):
         # Bind parm list to corresponding args, or single parm to list of args
         self.outer = outer
 
-        bindings = partition(2, destructure(list(append(*itertools.zip_longest(parms, args)))))
+        bindings = destruct(parms, args)
 
         for k, v in bindings:
-            try:
-                self.update({k: eval(v, self)})
-            except Exception:
-                self.update({k: v})
+            if isa(k, (list, Symbol)):
+                try:
+                    self.update([(k, eval(v, self))])
+                except Exception as e:
+                    print(e)
+                    self.update([(k, v)])
+            else:
+                self.update([(k, v)])
+
+            # try:
+            #     self.update({k: eval(v, self)})
+            # except Exception:
 
     def find(self, var):
         """Find the innermost Env where var appears."""
@@ -207,18 +217,16 @@ class Proc:
 
     def __init__(self, parms, exp, env):
         self.parms, self.exp, self.env = parms, [begin_, *exp], env
-        print(self.parms)
-        print(self.exp)
 
     def __call__(self, *args):
         pargs = list(zip(self.parms, list(args)))
-
-        print(f'pargs: {pargs}')
+        let1 = _let(pargs, self.exp)
+        # self.exp = let1
+        # print(f'pargs: {pargs}')
         # print(f'des: {destructure(append(*pargs))}')
-        let1 = let(pargs, self.exp)
-        print(f'let statement: {let1}')
-        self.exp = let1
-        return eval(self.exp, Env(self.parms, args, self.env))
+        # print(f'let statement: {let1}')
+
+        return eval(let1, Env(self.parms, args, self.env))
         # return self.exp
 
 
@@ -234,7 +242,6 @@ class Procedure:
 
     def __call__(self, *args):
         p = self.proc(*args)
-        print(p)
         return p(*args)
 
     def proc(self, *args):
@@ -243,6 +250,21 @@ class Procedure:
                 return p
         else:
             return self.variadic
+
+
+class Mac(Proc):
+    pass
+
+
+class Macro(Procedure):
+    def __init__(self, env, forms):
+        self.procs = []
+        self.variadic = None
+        for form in forms:
+            args, *exps = form
+            if '.' in args:
+                self.variadic = Mac(args, exps, env)
+            self.procs.append(Mac(args, exps, env))
 
 
 global_env = Env(name=__name__)
@@ -386,13 +408,14 @@ def expand(x, toplevel=False):
     elif isa(x[0], Symbol) and x[0] in macro_table:
         name = x[0]
         body = x[1:]
-        print(f'body: {body})')
+        # print(f'body: {body})')
         res = expand(macro_table[name](*body), toplevel)
         return res  # (m arg...)
 
     elif isa(x[0], Symbol) and x[0] in user_macros:
         name = x[0]
-        body = [[quote_, e] for e in x[1:]]
+        body = x[1:]
+        print(f'expanding: {x}')
         res = expand(user_macros[name](*body))
         return res
 
@@ -424,6 +447,7 @@ def special_functions():
         global_env['require'] = partial(require_, global_env)
         global_env['eval'] = eval
         global_env['expand'] = expand
+        global_env['destructure'] = lambda x: destruct(*zip(*x))
         global_env['/'] = div
 
         eval(parse('[import [math *]]'))
