@@ -83,11 +83,22 @@ You can even get a little fancy with recursion.  Which is good, because I haven'
 	;;=> 55
 	$->  [fib 20]
 	;;=> 6765
-
+	
+	;; or, corecursively
+	
+	$->  [defn fibco [[n] [fibco 0 1 n]]
+             [[a b n] [if [= 0 n] b [fibco b [add a b] [dec n]]]]]
+    $->  [fibco 5]
+    ;;=> 8
+    $->  [fibco 20]
+    ;;=> 10946
+    $->  [fibco 1000]
+    ;;=> 703303677114228158218352548771835497701812698363 ... snip ... 2245245323403501
+    
 Go crazy with tail recursion!
 
     $->  [defn sum [acc xs]
-           [if [= 0 [count xs]]
+           [if [empty? xs]
                acc
                [sum [add acc [first xs]] [rest xs]]]]
     $->  [sum 0 [range 10000]]
@@ -118,8 +129,8 @@ Arrity can be variadic!
 
 You can name your destructured items
 
-    $->  [defn foo [[a b c -as x]] [list a b c x]]
-    $->  [foo [1 2 3 4]]
+    $->  [defn bar [[a b c -as x]] [list a b c x]]
+    $->  [bar [1 2 3 4]]
     ;;=> [1, 2, 3, [1, 2, 3, 4]]
 
 

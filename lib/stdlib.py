@@ -59,13 +59,12 @@ def exit():
 
 def eq(*args):
     '=='
-    return True if reduce(lambda x, y: x if x == y else False, args) else False
+    return True if reduce(lambda x, y: y if x == y else False, args) is not False else False
 
 
 def eqq(*args):
     'is'
-    return True if reduce(lambda x, y: x if x is y else False, args) else False
-
+    return True if reduce(lambda x, y: y if x is y else False, args) is not False else False
 
 def not_(x):
     return op.not_(x)
