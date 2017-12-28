@@ -11,7 +11,7 @@ Heavily "inspired by" [stolen from] Peter Norvig's [articles](http://norvig.com/
 	
 #### Examples
 
-Please check [here](https://github.com/HiImJayHireMe/Now_Thats_A_Portfolio/tree/master/bracket_work) examples.
+Please check [here](https://github.com/HiImJayHireMe/Now_Thats_A_Portfolio/tree/master/bracket_work) for examples.
 	
 #### Quickstart
 
