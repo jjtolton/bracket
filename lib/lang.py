@@ -5,20 +5,20 @@ from functools import partial
 from naga import mapv, partition
 
 from lib.destructure import destruct
-from lib.macros import defn, macro_table, _let
+from lib.macros import defn, macro_table, _let, let
 from lib.special_forms import KeyWord
 from lib.stdlib import div
 from lib.symbols import Symbol, PyObject, quote_, quasiquote_, unquote_, unquotesplicing_, begin_, if_, def_, defmacro_, \
     fn_, append_, cons_
-from lib.utils import isa, to_string, ara
+from lib.utils import isa, to_string, ara, flatten
 
 
 class InPort(object):
     "An input port. Retains a line of chars."
-    tokenizer = re.compile(r"""\s*([~@]               |
+    tokenizer = re.compile(r"""\s*(,-                 |    # quasiquote
                                    [\[/`,\]]          |    # capture [ " ` , ] tokens
                                    '(?:[\\].|[^\\'])*'|    # strings
-                                     {.*?}            |
+                                     {.*?}            |    # future map literal
                                    ;.*|                    # single line comments
                                    [^\s\['"`,;\]]*)        # match everything that is NOT a special character
                                    (.*)                    # match the rest of the string""",
@@ -58,20 +58,26 @@ class Env(dict):
         self.outer = outer
 
         bindings = destruct(parms, args)
+        fparms = set(flatten(parms)) - {'.'}
 
         for k, v in bindings:
             if isa(k, (list, Symbol)):
                 try:
-                    self.update([(k, eval(v, self))])
+                    if isa(v, list) and len(v) > 0 and self.find(v[0]) and k not in fparms:
+                        self.update([(k, eval(v, self))])
+                    else:
+                        self.update([(k, v)])
+
                 except Exception as e:
-                    print(e)
+                    if __debug__ is True:
+                        print(e)
                     self.update([(k, v)])
             else:
                 self.update([(k, v)])
 
-            # try:
-            #     self.update({k: eval(v, self)})
-            # except Exception:
+                # try:
+                #     self.update({k: eval(v, self)})
+                # except Exception:
 
     def find(self, var):
         """Find the innermost Env where var appears."""
@@ -147,9 +153,9 @@ eof_object = Symbol('#<eof-object>')  # Note: uninterned; can't be read
 
 
 def atom(t):
-    if t == '#t':
+    if t == 'true':
         return True
-    if t == '#f':
+    if t == 'false':
         return False
 
     if t.isdecimal() or t.startswith('-') and t[1:].isdecimal():
@@ -160,7 +166,7 @@ def atom(t):
     except ValueError:
         pass
 
-    if t.startswith('-'):
+    if t.startswith('-') and len(t[1:]) > 0:
         return KeyWord(t[1:])
 
     if t.startswith('\'') and t.endswith('\''):
@@ -172,10 +178,12 @@ def atom(t):
     return Symbol(t)
 
 
-quotes = {"/": quote_,
-          "`": quasiquote_,
-          ",": unquote_,
-          ",@": unquotesplicing_}
+# @formatter:off
+quotes = {"/":  quote_,
+          "`":  quasiquote_,
+          ",":  unquote_,
+          ",-": unquotesplicing_}
+# @formatter:on
 
 
 def read(inport: type(InPort)):
@@ -219,15 +227,9 @@ class Proc:
         self.parms, self.exp, self.env = parms, [begin_, *exp], env
 
     def __call__(self, *args):
-        pargs = list(zip(self.parms, list(args)))
-        let1 = _let(pargs, self.exp)
-        # self.exp = let1
-        # print(f'pargs: {pargs}')
-        # print(f'des: {destructure(append(*pargs))}')
-        # print(f'let statement: {let1}')
 
+        let1 = _let(self.parms, list(args), self.exp)
         return eval(let1, Env(self.parms, args, self.env))
-        # return self.exp
 
 
 class Procedure:
@@ -333,9 +335,13 @@ def eval(x, env=global_env, toplevel=False):
             if isa(x, Proc):
                 x = proc.exp
                 env = Env(proc.parms, exps, proc.env)
+                continue
 
-            else:
+            if callable(proc):
                 return proc(*exps)
+
+            # TODO: danger zone! put this hack in to help deal with macros
+            return [proc, *exps]
 
 
 def require(x, predicate, msg="wrong length"):
@@ -415,8 +421,7 @@ def expand(x, toplevel=False):
     elif isa(x[0], Symbol) and x[0] in user_macros:
         name = x[0]
         body = x[1:]
-        print(f'expanding: {x}')
-        res = expand(user_macros[name](*body))
+        res = expand(user_macros[name].proc(*body)(*body))
         return res
 
     else:  # => macroexpand if m isa macro

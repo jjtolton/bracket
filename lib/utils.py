@@ -1,3 +1,5 @@
+import itertools
+
 from lib.symbols import Symbol
 
 
@@ -11,6 +13,14 @@ def isa(x, y):
 
 def to_string(x):
     return str(x)
+
+
+def flatten(x):
+    if isa(x, list) and len(x) == 0:
+        return []
+    if isa(x, list):
+        return list(itertools.chain(*map(flatten, x)))
+    return [x]
 
 
 class AutoGenSym:

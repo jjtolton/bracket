@@ -64,7 +64,7 @@ def eq(*args):
 
 def eqq(*args):
     'is'
-    return True if reduce(lambda x, y: x if x is y else y, args) else False
+    return True if reduce(lambda x, y: x if x is y else False, args) else False
 
 
 def not_(x):

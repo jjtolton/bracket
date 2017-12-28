@@ -54,7 +54,8 @@ def destruct(bindings, args, ag=None):
         return destruct(first(rest(bindings)), list(args), ag)
 
     if isa(b, list):
-        # print('vector_binding: ', b, v, rest(bindings), rest(args))
+        if len(b) == 0:
+            return []
         return vector_bindings(b, v) + destruct(rest(bindings), rest(args), ag)
 
     if isa(b, (Symbol, str)):

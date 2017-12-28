@@ -1,14 +1,21 @@
 [import lib.stdlib lib]
 [import [lib.stdlib add mul sub div gt lt lte gte exit cons symbol pformat dropv count apply]]
-[import [naga append conj first last rest get drop assoc mapv partition]]
+[import [naga append conj first last rest get drop assoc mapv partition inc dec]]
+
+[def nil lib/nil]
 
 [def < lt]
 [def > gt]
 [def <= lte]
 [def >= gte]
-[def eq? lib/eqq]
 [def = lib/eq]
+[def is? lib/eqq]
+[def eq? lib/eqq]
+
 [def != lib/neq]
+[def - sub]
+
+
 
 [def empty? lib/empty]
 
@@ -34,6 +41,9 @@
 
 [def . py/getattr]
 
+[def t true]
+[def f false]
+
 [defn butlast [x] [[. x __getitem__] [py/slice 0 -1]]]
 
 [defn assert
@@ -57,13 +67,32 @@
 [defn print [[x]      [py/print x]]
             [[x . xs] [apply py/print x xs]]]
 
-;[defmacro and
-;   [[] #t]
-;   [[x] x]
-;   [[x . xs]
-;    [print [list x xs]]
-;    `[if [empty? xs]
-;         x
-;         [if [false? x]
-;              x
-;              [apply and xs]]]]]
+
+[defmacro xrange [. args] `[to-list [range ,-args]]]
+
+[defmacro apply [f . xs]
+          [if [list? [last xs]]
+              `[apply ,f ,-[butlast xs] ,-[last xs]]
+              `[,f [,-xs]]]]
+
+
+[defmacro and [[] true]
+             [[x]    x]
+        [[x . xs]
+         [if [empty? xs]
+             x
+             `[if [not ,x]
+                   ,x
+                   [and ,[first xs] ,-[rest xs]]]]]]
+
+
+[defmacro or [[] true]
+            [[x]    x]
+      [[x .  xs]
+       [if [empty? xs]
+           x
+           `[if ,x
+                ,x
+                [or ,[first xs] ,-[rest xs]]]]]]
+
+
