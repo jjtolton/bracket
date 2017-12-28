@@ -125,12 +125,12 @@ You can name your destructured items
 
 Access Python interop via "`py/`"
 
-    $->  [py/dict /[[1 2] [3 4]]
+    $->  [py/dict [[1 2] [3 4]]
     ;;=> {1: 2, 3: 4}
-    $->  [def m [py/dict /[[1 2] [3 4]]]
+    $->  [def m [py/dict [[1 2] [3 4]]]
     $->  [get m 1]
     2
-    $->  [py/sum /[1 2 3 4]]
+    $->  [py/sum [1 2 3 4]]
     ;;=> 10
     
 
