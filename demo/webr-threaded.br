@@ -1,0 +1,9 @@
+[import requests]
+[import bs4]
+
+[defn run []
+    [-> 'http://www.google.com'
+        requests/get
+        [. content]
+        [bs4/BeautifulSoup 'html.parser']
+        [[fn [x] [[. x find] 'a']]]]]

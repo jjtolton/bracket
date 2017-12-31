@@ -86,7 +86,8 @@ You can even get a little fancy with recursion.  Which is good, because I haven'
 	
 	;; or, corecursively
 	
-	$->  [defn fibco [[n] [fibco 0 1 n]]
+	$->  [defn fibco 
+	             [[n] [fibco 0 1 n]]
              [[a b n] [if [= 0 n] b [fibco b [add a b] [dec n]]]]]
     $->  [fibco 5]
     ;;=> 8
@@ -117,6 +118,24 @@ Take advantage of arrity-based dispatch!
     ;;=> 45
     $->  [xsum 10000]
     ;;=> 49995000
+
+Threading addict? **[bracket]**'s got you!
+
+
+    $-> [import requests]
+    $-> [import bs4]
+    $-> [-> 'http://www.google.com'
+            requests/get
+            [. content]
+            [bs4/BeautifulSoup 'html.parser']
+            [[fn [x] [[. x find] 'a']]]]]
+    ;;=> <a class="gb1" href="http://www.google.com/imghp?hl=en&amp;tab=wi">Images</a>
+  
+    $->  [->> [hashmap -cat 1 -dog 2]
+          -cat
+          inc
+          [- 0]]
+    ;;=> -2
 
 Arrity can be variadic!
 
