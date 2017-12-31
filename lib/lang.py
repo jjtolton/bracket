@@ -9,8 +9,8 @@ from lib.macros import defn, macro_table, _let, let
 from lib.special_forms import KeyWord
 from lib.stdlib import div
 from lib.symbols import Symbol, PyObject, quote_, quasiquote_, unquote_, unquotesplicing_, begin_, if_, def_, defmacro_, \
-    fn_, append_, cons_
-from lib.utils import isa, to_string, ara, flatten
+    fn_, append_, cons_, autogensym_
+from lib.utils import isa, to_string, ara, flatten, AutoGenSym
 
 
 class InPort(object):
@@ -53,31 +53,42 @@ class InPort(object):
 class Env(dict):
     """An environment: a dict of {'var':val} pairs, with an outer Env."""
 
-    def __init__(self, parms=(), args=(), outer=None, name=None):
+    def __init__(self, parms=(), args=(), outer=None, name=None, macro=False):
         # Bind parm list to corresponding args, or single parm to list of args
-        self.outer = outer
 
-        bindings = destruct(parms, args)
-        fparms = set(flatten(parms)) - {'.'}
-
-        for k, v in bindings:
-            if isa(k, (list, Symbol)):
-                try:
-                    if isa(v, list) and len(v) > 0 and self.find(v[0]) and k not in fparms:
-                        self.update([(k, eval(v, self))])
-                    else:
-                        self.update([(k, v)])
-
-                except Exception as e:
-                    if __debug__ is True:
-                        print(e)
-                    self.update([(k, v)])
+        if macro is True:
+            self.outer = outer
+            if isa(parms, Symbol):
+                self.update({parms: list(args)})
             else:
-                self.update([(k, v)])
+                if len(args) != len(parms):
+                    raise TypeError('expected %s, given %s, '
+                                    % (to_string(parms), to_string(args)))
+                self.update(zip(parms, args))
+        else:
+            self.outer = outer
 
-                # try:
-                #     self.update({k: eval(v, self)})
-                # except Exception:
+            bindings = destruct(parms, args)
+            fparms = set(flatten(parms)) - {'.'}
+
+            for k, v in bindings:
+                if isa(k, (list, Symbol)):
+                    try:
+                        if isa(v, list) and len(v) > 0 and not isa(v[0], list) and self.find(v[0]) and k not in fparms:
+                            self.update([(k, eval(v, self))])
+                        else:
+                            self.update([(k, v)])
+
+                    except Exception as e:
+                        if __debug__ is True:
+                            print(e)
+                        self.update([(k, v)])
+                else:
+                    self.update([(k, v)])
+
+                    # try:
+                    #     self.update({k: eval(v, self)})
+                    # except Exception:
 
     def find(self, var):
         """Find the innermost Env where var appears."""
@@ -175,6 +186,9 @@ def atom(t):
     if t.startswith('py/'):
         return PyObject(t[3:])
 
+    if t.endswith('#'):
+        return [autogensym_, t[:-1]]
+
     return Symbol(t)
 
 
@@ -227,7 +241,6 @@ class Proc:
         self.parms, self.exp, self.env = parms, [begin_, *exp], env
 
     def __call__(self, *args):
-
         let1 = _let(self.parms, list(args), self.exp)
         return eval(let1, Env(self.parms, args, self.env))
 
@@ -254,8 +267,39 @@ class Procedure:
             return self.variadic
 
 
+class ApplicationContext:
+    @staticmethod
+    def expand_exp(env, x):
+        proc = eval(x.pop(0), env)
+        return proc, x
+
+    @classmethod
+    def __enter__(cls):
+        globals().update(cls.new)
+
+    @classmethod
+    def __exit__(cls, exc_type, exc_val, exc_tb):
+        globals().update(cls.old)
+
+
+def expand_exp(env, x):
+    exps = [eval(exp, env) for exp in x]
+    proc = exps.pop(0)
+    return proc, exps
+
+
 class Mac(Proc):
-    pass
+    def __call__(self, *args, **kwargs):
+        if '.' in self.parms:
+            args = list(args)
+            idx = self.parms.index('.')
+            args = args[:idx] + [args[idx:]]
+            # TODO: possible trouble spot
+            parms = self.parms[:idx] + self.parms[idx+1:]
+        else:
+            parms = self.parms
+
+        return eval(self.exp, Env(parms, args, self.env, macro=True))
 
 
 class Macro(Procedure):
@@ -267,6 +311,36 @@ class Macro(Procedure):
             if '.' in args:
                 self.variadic = Mac(args, exps, env)
             self.procs.append(Mac(args, exps, env))
+
+
+class MacroContext(ApplicationContext):
+    def __init__(self):
+        self.old = {Procedure.__name__: Procedure,
+                    Proc.__name__: Proc,
+                    expand_exp.__name__: expand_exp}
+
+        self.new = {Procedure.__name__: Macro,
+                    Proc.__name__: Mac,
+                    expand_exp.__name__: self.old[expand_exp.__name__]}
+
+    @staticmethod
+    def expand_exp(env, x):
+        proc = eval(x.pop(0), env)
+        return proc, x
+
+    def __enter__(self):
+        globals().update(self.new)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        globals().update(self.old)
+
+
+class ProcedureContext(ApplicationContext):
+    new = {Procedure.__name__: Procedure,
+           Proc.__name__: Proc,
+           expand_exp.__name__: expand_exp}
+
+    old = {}
 
 
 global_env = Env(name=__name__)
@@ -308,6 +382,7 @@ def eval(x, env=global_env, toplevel=False):
                 exp = [list(exp)]
             else:
                 (_, exp) = x
+            # with ProcedureContext():
             return Procedure(env, exp)
         elif x[0] is quote_:
             _, q = x
@@ -325,8 +400,7 @@ def eval(x, env=global_env, toplevel=False):
                 else:
                     x[1:] = [[quote_, e] for e in x[1:]]
 
-            exps = [eval(exp, env) for exp in x]
-            proc = exps.pop(0)
+            proc, exps = expand_exp(env, x)
 
             if isa(proc, Procedure):
                 x = proc.proc(*exps)
@@ -372,9 +446,10 @@ def expand(x, toplevel=False):
         if _d == defmacro_:
             _, _, body = expand(defn(*x[1:]))
             # require(x, toplevel, "define-macro only allowed at top level")
-            proc = eval(body)
+            with MacroContext():
+                proc = eval(body)
             require(x, callable(proc), "macro must be a procedure")
-            user_macros[v] = proc  # (define-macro v proc)
+            macro_table[v] = proc  # (define-macro v proc)
             return None  # => None; add v:proc to macro_table
         exp = expand(body)
         return [_d, v, exp]
@@ -418,12 +493,6 @@ def expand(x, toplevel=False):
         res = expand(macro_table[name](*body), toplevel)
         return res  # (m arg...)
 
-    elif isa(x[0], Symbol) and x[0] in user_macros:
-        name = x[0]
-        body = x[1:]
-        res = expand(user_macros[name].proc(*body)(*body))
-        return res
-
     else:  # => macroexpand if m isa macro
         return mapv(expand, x)  # (f arg...) => expand each
 
@@ -439,6 +508,8 @@ def expand_quasiquote(x):
     if x[0] is unquote_:
         require(x, len(x) == 2)
         return x[1]
+    if x[0] is autogensym_:
+        return AutoGenSym()(x[1])
     elif is_pair(x[0]) and x[0][0] is unquotesplicing_:
         require(x[0], len(x[0]) == 2)
         return [append_, x[0][1], expand_quasiquote(x[1:])]
@@ -458,6 +529,12 @@ def special_functions():
         eval(parse('[import [math *]]'))
         eval(parse('[import [cmath *]]'))
         eval(parse('[require [stdlib *]]]'))
+
+        def macroexpand(form):
+            name, *body = form
+            return macro_table[name](*body)
+
+        global_env['macroexpand'] = macroexpand
 
         del global_env['lib']
     except FileNotFoundError:

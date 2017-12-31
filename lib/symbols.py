@@ -18,6 +18,9 @@ quasiquote_, unquote_, unquotesplicing_ = mapv(Sym,
 
 append_, cons_, let_, cond_ = mapv(Sym,
 "append cons let cond".split())
+
+autogensym_ = Sym('autogensym')
+
 # @formatter:on
 
 def PyObject(x):

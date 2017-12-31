@@ -1,6 +1,6 @@
 [import lib.stdlib lib]
 [import [lib.stdlib add mul sub div gt lt lte gte exit cons symbol pformat dropv count apply]]
-[import [naga append conj first last rest get drop assoc mapv partition inc dec]]
+[import [naga append conj first last rest get drop assoc mapv partition inc dec second]]
 
 [def nil lib/nil]
 
@@ -50,8 +50,8 @@
     [[exp res]     [let [msg [pformat 'expecting {}, got {}' exp res]]
                      [assert exp res msg]]]
     [[exp res msg] [if [= exp res]
-                       #t
-                       [begin [print msg] #f]]]]
+                       true
+                       [begin [print msg] false]]]]
 
 
 [defn hashmap [[] [py/dict]]
@@ -79,11 +79,7 @@
 [defmacro and [[] true]
              [[x]    x]
         [[x . xs]
-         [if [empty? xs]
-             x
-             `[if [not ,x]
-                   ,x
-                   [and ,[first xs] ,-[rest xs]]]]]]
+        `[let [y ,x] [if y [and ,-xs] y]]]]
 
 
 [defmacro or [[] true]
@@ -93,6 +89,21 @@
            x
            `[if ,x
                 ,x
-                [or ,[first xs] ,-[rest xs]]]]]]
+                [or ,-[rest xs]]]]]]
+
+
+
+[defmacro when [test . body]
+           [list /if test
+                     `[begin ,-body]
+                     py/None]]
+
+[defmacro cond
+          [[a b . clauses]
+            `[let [x ,a]
+                  [if x ,b py/None]]]
+
+           ;[if a b `[cond ,-clauses]]
+          [[a b] [list /if a b py/None]]]
 
 
