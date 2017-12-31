@@ -363,7 +363,7 @@ def eval(x, env=global_env, toplevel=False):
             return x
         elif x[0] == 'if':  # (if test conseq alt)
             (_, test, conseq, alt) = x
-            x = (conseq if eval(test, env) else alt)
+            x = (conseq if eval(test, env) not in (None, False) else alt)
         elif x[0] == 'def':  # (define var exp)
             (_, var, exp) = x
             env[var] = eval(exp, env)
@@ -433,7 +433,7 @@ def expand(x, toplevel=False):
     elif x[0] is quote_:  # (quote exp)
         require(x, len(x) == 2)
         return x
-    elif x[0] is if_:
+    elif x[0] == if_:
         if len(x) == 3:
             x = x + [None]  # (if t c) => (if t c None)
         require(x, len(x) == 4)
@@ -443,6 +443,7 @@ def expand(x, toplevel=False):
     elif x[0] == def_ or x[0] == defmacro_:
         require(x, len(x) >= 3)
         _d, v, body = x[0], x[1], x[2]
+        v = str(v)
         if _d == defmacro_:
             _, _, body = expand(defn(*x[1:]))
             # require(x, toplevel, "define-macro only allowed at top level")
@@ -486,8 +487,9 @@ def expand(x, toplevel=False):
         require(x, len(x) == 2)
         return expand_quasiquote(x[1])
 
-    elif isa(x[0], Symbol) and x[0] in macro_table:
-        name = x[0]
+    # use of string was hack I put in to allow -> and ->> macros
+    elif isa(x[0], (Symbol, KeyWord)) and str(x[0]) in macro_table:
+        name = str(x[0])
         body = x[1:]
         # print(f'body: {body})')
         res = expand(macro_table[name](*body), toplevel)

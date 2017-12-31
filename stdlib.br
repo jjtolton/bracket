@@ -15,7 +15,7 @@
 [def != lib/neq]
 [def - sub]
 
-
+[defn type? [x] [py/type x]]
 
 [def empty? lib/empty]
 
@@ -85,25 +85,41 @@
 [defmacro or [[] true]
             [[x]    x]
       [[x .  xs]
-       [if [empty? xs]
-           x
-           `[if ,x
-                ,x
-                [or ,-[rest xs]]]]]]
+       `[let [y ,x] [if y y [or ,-xs]]]]]
 
 
-
-[defmacro when [test . body]
-           [list /if test
-                     `[begin ,-body]
-                     py/None]]
+[defmacro when [test . body] `[if ,test [begin ,-body]]]
 
 [defmacro cond
           [[a b . clauses]
-            `[let [x ,a]
-                  [if x ,b py/None]]]
+           `[if ,a
+                ,b
+                [cond ,-clauses]]]
+          [[a b]
+           `[if ,a ,b]]]
 
-           ;[if a b `[cond ,-clauses]]
-          [[a b] [list /if a b py/None]]]
+[defmacro case
+    [[e] false]
+    [[e a] a]
+    [[e . clauses] [let [[a b . clauses] clauses]
+                     `[if [= ,e ,a]
+                          ,b
+                          [case ,e ,-clauses]]]]]
 
+[defmacro ->
+   [[e . forms] [let [[form . forms] forms
+                      [f . body] [if [list? form] form [list form]]]
+                      `[-> [,f ,e ,-body] ,-forms]]]
+   [[e] e]]
+
+[defmacro ->>
+   [[e . forms] [let [[form . forms] forms
+                      [f . body] [if [list? form] form [list form]]]
+                      `[->> [,f ,-body ,e] ,-forms]]]
+   [[e] e]]
+
+
+[defmacro threadfirst [. exps] `[-> ,-exps]]
+
+[defmacro threadlast [. exps] `[->> ,-exps]]
 

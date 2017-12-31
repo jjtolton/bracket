@@ -13,3 +13,6 @@ class KeyWord(str):
 
     def __str__(self):
         return f'-{super().__str__()}'
+
+    def __call__(self, x):
+        return get(x, self)
