@@ -530,7 +530,7 @@ def special_functions():
 
         eval(parse('[import [math *]]'))
         eval(parse('[import [cmath *]]'))
-        eval(parse('[require [stdlib *]]]'))
+        eval(parse('[require [core *]]]'))
 
         def macroexpand(form):
             name, *body = form

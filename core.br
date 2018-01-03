@@ -1,6 +1,11 @@
 [import lib.stdlib lib]
 [import [lib.stdlib add mul sub div gt lt lte gte exit cons symbol pformat dropv count apply]]
-[import [naga append conj first last rest get drop assoc mapv partition inc dec second]]
+[import [naga append conj first last rest get drop assoc mapv partition inc dec second LazySeq some]]
+[import [lib.special_forms Set HashMap]]
+[import itertools]
+
+
+[def lazy-seq LazySeq]
 
 [def nil lib/nil]
 
@@ -31,7 +36,7 @@
 
 [def list lib/list_]
 
-[def to-list lib/to_list]
+[def list* lib/to_list]
 
 [def bool? lib/boolean]
 
@@ -43,6 +48,8 @@
 
 [def t true]
 [def f false]
+
+[def set Set]
 
 [defn butlast [x] [[. x __getitem__] [py/slice 0 -1]]]
 
@@ -68,7 +75,7 @@
             [[x . xs] [apply py/print x xs]]]
 
 
-[defmacro xrange [. args] `[to-list [range ,-args]]]
+[defmacro xrange [. args] `[list* [range ,-args]]]
 
 [defmacro apply [f . xs]
           [if [list? [last xs]]
@@ -95,6 +102,7 @@
            `[if ,a
                 ,b
                 [cond ,-clauses]]]
+          [[a] a]
           [[a b]
            `[if ,a ,b]]]
 
@@ -123,3 +131,28 @@
 
 [defmacro threadlast [. exps] `[->> ,-exps]]
 
+
+[defn kw->fn- [exp]
+   [let [replace [. exp replace]
+         r       [replace '-' '']
+         join    [. '' join]]
+         [join   [list r '-']]]]
+
+
+
+
+[defmacro pre-for
+           [[bindings body]
+            [let [bindings [mapv list* [partition 2 bindings]]]
+                  `[pre-for [] ,bindings ,body]]]
+
+           [[acc bindings body]
+            [if [empty? bindings]
+                `/[-> ,body ,-acc]
+                [let [[exp . bindings] bindings
+                      [f s] exp
+                      sx   [set /[-for -when -while -let]]
+                      kw?  [sx f]]
+                   [if kw?
+                       `[pre-for ,[conj acc [list [kw->fn- f] s]] [,-bindings] ,body]
+                       `[pre-for ,[conj acc [list /for- [f s]]] [,-bindings] ,-body]]]]]]
