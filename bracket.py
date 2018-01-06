@@ -31,5 +31,6 @@ def repl(prompt='$-> ', inport=InPort(sys.stdin), out=sys.stdout, debug=False):
 
 
 if __name__ == '__main__':
+    print("Welcome to [bracket]!")
     special_functions()
     repl(debug=__debug__)
