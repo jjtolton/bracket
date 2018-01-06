@@ -128,7 +128,7 @@ Threading addict? **[bracket]**'s got you!
             requests/get
             [. content]
             [bs4/BeautifulSoup 'html.parser']
-            [[fn [x] [[. x find] 'a']]]]]
+            [[fn [x] [. x find 'a']]]]]
     ;;=> <a class="gb1" href="http://www.google.com/imghp?hl=en&amp;tab=wi">Images</a>
   
     $->  [->> [hashmap -cat 1 -dog 2]
@@ -159,24 +159,47 @@ Access Python interop via "`py/`"
     ;;=> {1: 2, 3: 4}
     $->  [def m [py/dict [[1 2] [3 4]]]
     $->  [get m 1]
-    2
+    ;;=> 2
     $->  [py/sum [1 2 3 4]]
     ;;=> 10
     
 
-Access Python object methods with "`.`"
+Access Python object attributes with the "`.-`" macro.
 
-    $-> [def split [. py/str split]]
-    $-> [split 'hey guy']
-    ['hey', 'guy']
-    $-> [split 'name=taco' '=']
-    ['name', 'taco']
+    $->  [def split [.- py/str split]]
+    $->  [split 'hey guy']
+    ;;=> ['hey', 'guy']
+    $->  [split 'name=taco' '=']
+    ;;=> ['name', 'taco']
+    
+Access Python object methods with the "`.`" macro'.
+
+    $->  [defn join [s . strs] [. s join strs]]
+    $->  [join ', ' 'cat' 'dog' 'bird']
+    ;;=> cat, dog, bird
+
 
 Define your own macros:
 
     $->  [defmacro infix [a op b] [list op a b]]
     $->  [infix 1 add 2]
     ;;=> 3
+
+
+Macros support `&form` and `&env` to get access to the passed in form and local env 
+    
+    $-> [defmacro ratio->frac [ratio]
+            [let [fracs [-> &form
+                            first
+                            py/str
+                            [. replace '\s' '']
+                            [. split ':']
+                            [[fn [x] [mapv int x]]]]
+                  total [apply add fracs]]
+             [mapv [fn [x] [div x total]] fracs]]]
+    $->  [ratio->frac 1:2:1:3]
+    ;;=> [1/7, 2/7, 1/7, 3/7]
+
     
 Macros support variable arrity, destructuring, and recursion:
 
@@ -211,7 +234,7 @@ Import external Python modules with the `import` special form
       [print a-tag]]]
 ```
 
-Load custom __[bracket]__ modules using `require`:
+Load user-defined __[bracket]__ modules using `require`:
 
     $->  [require demo/webrequest wr]
     $->  [wr/run]
@@ -241,6 +264,7 @@ Load custom __[bracket]__ modules using `require`:
 * [x] better let destructuring
 * [x] User defined macros
 * [ ] better interpreter experience
+* [ ] multi-line strings
 * [ ] Map literals
 * [ ] iterator constructs ("`for`" special form)
 * [ ] Concurrency support
