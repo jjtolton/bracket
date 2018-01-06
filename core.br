@@ -1,9 +1,19 @@
-[import lib.stdlib lib]
-[import [lib.stdlib add mul sub div gt lt lte gte exit cons symbol pformat dropv count apply]]
+[import lib.core lib]
+[import [lib.core add mul sub div gt lt lte gte exit cons symbol pformat dropv count apply]]
 [import [naga append conj first last rest get drop assoc mapv partition inc dec second LazySeq some]]
+[import naga]
 [import [lib.special_forms Set HashMap]]
+[import operator op]
 [import itertools]
+[import pickle]
 
+[defmacro . [obj attr . args]
+            [let [attr [py/str attr]]
+                 `[[py/getattr ,obj ,attr] ,-args]]]
+
+[defmacro .- [obj attr]
+     [let [attr [py/str attr]]
+          `[py/getattr ,obj ,attr]]]
 
 [def lazy-seq LazySeq]
 
@@ -22,7 +32,21 @@
 
 [defn type? [x] [py/type x]]
 
+[defn isa? [x types] [py/isinstance x types]]
+
 [def empty? lib/empty]
+
+[def int py/int]
+[def float py/float]
+[def tuple py/tuple]
+
+[defn int? [x] [isa? x int]]
+
+[defn mod [a b] [op/mod a b]]
+
+[defn zero? [x] [= 0 x]]
+
+[defn even? [x] [zero? [mod x 2]]]
 
 [def false? lib/false_]
 
@@ -44,14 +68,20 @@
 
 [def range py/range]
 
-[def . py/getattr]
+[defn subvec [[]                     []]
+             [[xs]                   xs]
+             [[xs start]            [. xs __getitem__ [py/slice start [count xs]]]]
+             [[xs start stop]       [. xs __getitem__ [py/slice start stop]]]
+             [[xs start stop step]  [. xs __getitem__ [py/slice start stop step]]]]
+
+
 
 [def t true]
 [def f false]
 
 [def set Set]
 
-[defn butlast [x] [[. x __getitem__] [py/slice 0 -1]]]
+[defn butlast [x] [[.- x __getitem__] [py/slice 0 -1]]]
 
 [defn assert
     [[exp res]     [let [msg [pformat 'expecting {}, got {}' exp res]]
@@ -71,16 +101,15 @@
                       [into [conj a [first b]]
                             [rest b]]]]]
 
-[defn print [[x]      [py/print x]]
-            [[x . xs] [apply py/print x xs]]]
-
-
 [defmacro xrange [. args] `[list* [range ,-args]]]
 
-[defmacro apply [f . xs]
+[defmacro imply [f . xs]
           [if [list? [last xs]]
-              `[apply ,f ,-[butlast xs] ,-[last xs]]
+              `[imply ,f ,-[butlast xs] ,-[last xs]]
               `[,f [,-xs]]]]
+
+[defn print [[x]      [py/print x]]
+            [[x . xs] [apply py/print x xs]]]
 
 
 [defmacro and [[] true]
@@ -98,13 +127,15 @@
 [defmacro when [test . body] `[if ,test [begin ,-body]]]
 
 [defmacro cond
-          [[a b . clauses]
-           `[if ,a
-                ,b
-                [cond ,-clauses]]]
           [[a] a]
           [[a b]
-           `[if ,a ,b]]]
+           `[if ,a ,b nil]]
+          [[a b . clauses]
+            [if [= 0 [count clauses]]
+                `[cond ,a ,b]
+                `[if ,a
+                     ,b
+                     [cond ,-clauses]]]]]
 
 [defmacro case
     [[e] false]
@@ -133,12 +164,10 @@
 
 
 [defn kw->fn- [exp]
-   [let [replace [. exp replace]
+   [let [replace [.- exp replace]
          r       [replace '-' '']
-         join    [. '' join]]
+         join    [.- '' join]]
          [join   [list r '-']]]]
-
-
 
 
 [defmacro pre-for
@@ -155,4 +184,54 @@
                       kw?  [sx f]]
                    [if kw?
                        `[pre-for ,[conj acc [list [kw->fn- f] s]] [,-bindings] ,body]
-                       `[pre-for ,[conj acc [list /for- [f s]]] [,-bindings] ,-body]]]]]]
+                       `[pre-for ,[conj acc [list /for- [f s]]] [,-bindings] ,body]]]]]]
+
+
+[defmacro for
+          [[bindings body] `[for [] [] ,bindings ,body]]
+          [[acc body-acc bindings body]
+           [print bindings]
+           ;[let [[a b] bindings]
+           ;   [print [get &env 'a']]
+           ;   [print [eval `,b &env]]
+           ;   ]
+           [if [empty? bindings]
+               [begin [import [lib.loadbr brfn]]
+                      [let [globals   [. [py/globals] update [hashmap 'brfn' brfn 'global_env' &env]]
+                            for-loop  [pformat '[[{}] {}]' [. ', ' join body-acc] [. ' ' join acc]]
+                            _         [print for-loop]
+                            results   [py/eval for-loop globals &env]
+                            f         `[fn [,body-acc] ,body]
+                            r          `[mapv ,f ,results]]
+                            [print f]
+                            [print r]
+                            r]]
+               [let [[a b . bindings] bindings]
+                    [case a
+                          -when [let [b-args [mapv [fn [x] [-> x py/str [. replace '\'', '']]] [subvec b 1]]
+                                      b      [cons b b-args]
+                                      py-if  [pformat 'if brfn(*{})' b]]
+                                  `[for [,-acc ,py-if] ,body-acc ,bindings ,body]]
+                         -while `[for ,acc ,[conj bindings -when b] ,body]
+
+                          ; for
+                          [let [args   [. ', ' join [mapv py/str [subvec b 1]]]
+                               bfmt    [pformat 'brfn(*{})' b]
+                               py-for  [pformat 'for {} in {}' a bfmt]]
+                            `[for [,-acc ,py-for] [,-body-acc ,a] ,bindings ,body]]]]]]]
+
+
+; [defmacro for2 [[seq-exprs body-expr]]
+
+
+[defn take-while
+      [[pred xs]     [take-while [] pred xs]]
+      [[acc pred xs] [cond       [empty? xs]       acc
+                                 [pred [first xs]] [take-while [conj acc [first xs]] pred [rest xs]]
+                                   acc]]]
+
+[defmacro comment [. body] py/None]
+
+[defn concat [. strs] [. '' join strs]]
+
+[defn s-join [s . ss] [. s join ss]]
