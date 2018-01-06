@@ -31,19 +31,19 @@
 [defn tests []
 
    [print 'test 1: 1122']
-   ;1122 produces a sum of 3 (1 + 2) because the first digit (1) matches the second digit and the third digit (2) matches the fourth digit.
+   [comment 1122 produces a sum of 3 (1 + 2) because the first digit (1) matches the second digit and the third digit (2) matches the fourth digit.]
    [assert 3 [captcha '1122']]
 
    [print 'test 2: 1111']
-   ;1111 produces 4 because each digit (all 1) matches the next.
+   [comment 1111 produces 4 because each digit (all 1) matches the next]
    [assert 4 [captcha '1111']]
 
    [print 'test 3: 1234']
-   ;1234 produces 0 because no digit matches the next.
+   [comment 1234 produces 0 because no digit matches the next.]
    [assert 0 [captcha '1234']]
 
    [print 'test 4: 91212129']
-   ;91212129 produces 9 because the only digit that matches the next one is the last digit, 9.
+   [comment 91212129 produces 9 because the only digit that matches the next one is the last digit, 9.]
    [assert 9 [captcha '91212129']]
 
    [print 'test 5: stress test']

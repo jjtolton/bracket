@@ -1,0 +1,9 @@
+[defmacro ratio->frac [ratio]
+        [let [fracs [-> &form
+                        first
+                        py/str
+                        [. replace '\s' '']
+                        [. split ':']
+                        [[fn [x] [mapv int x]]]]
+              total [apply add fracs]]
+         [mapv [fn [x] [div x total]] fracs]]]

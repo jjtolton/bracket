@@ -4,6 +4,6 @@
 [defn run []
     [-> 'http://www.google.com'
         requests/get
-        [. content]
+        [.- content]
         [bs4/BeautifulSoup 'html.parser']
-        [[fn [x] [[. x find] 'a']]]]]
+        [[fn [x] [. x find 'a']]]]]
