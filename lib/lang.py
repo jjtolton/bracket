@@ -2,14 +2,14 @@ import io
 import re
 from functools import partial
 
-from naga import mapv, partition
+from naga import mapv
 
 from lib.destructure import destruct
-from lib.macros import defn, macro_table, _let, let
+from lib.macros import defn, macro_table, _let
 from lib.special_forms import KeyWord
-from lib.stdlib import div
+from lib.core import div
 from lib.symbols import Symbol, PyObject, quote_, quasiquote_, unquote_, unquotesplicing_, begin_, if_, def_, defmacro_, \
-    fn_, append_, cons_, autogensym_
+    fn_, append_, cons_, autogensym_, let_
 from lib.utils import isa, to_string, ara, flatten, AutoGenSym
 
 
@@ -65,6 +65,8 @@ class Env(dict):
                     raise TypeError('expected %s, given %s, '
                                     % (to_string(parms), to_string(args)))
                 self.update(zip(parms, args))
+                self.update([('&form', args)])
+                self.update([('&env', self)])
         else:
             self.outer = outer
 
@@ -156,8 +158,14 @@ def require_(global_env, n, name=None):
         if items == '*':
             # temp_env = Env(outer=global_env)
             with open(name) as f:
-                contents = f.read()
-                return eval(parse(contents), global_env)
+                for x in read(f.read()):
+                    try:
+                        eval(expand(x), global_env)
+                    except Exception as e:
+                        print(f'unable to parse {x}')
+                return global_env
+
+
 
 
 eof_object = Symbol('#<eof-object>')  # Note: uninterned; can't be read
@@ -172,10 +180,8 @@ def atom(t):
     if t.isdecimal() or t.startswith('-') and t[1:].isdecimal():
         return int(t)
 
-    try:
+    if re.match('^[-]?\d+?[.]\d*?$', t):
         return float(t)
-    except ValueError:
-        pass
 
     if t.startswith('-') and len(t[1:]) > 0:
         return KeyWord(t[1:])
@@ -200,7 +206,10 @@ quotes = {"/":  quote_,
 # @formatter:on
 
 
-def read(inport: type(InPort)):
+def read(inport: (type(InPort), str)):
+    if isa(inport, str):
+        return read(InPort(io.StringIO(f'[begin {inport}]')))
+
     def _read(t):
         res = []
         if t == '[':
@@ -225,8 +234,6 @@ def read(inport: type(InPort)):
 
 
 def parse(x):
-    if isa(x, str):
-        return parse(InPort(io.StringIO(f'[begin {x}]')))
     data = read(x)
     return expand(data)
 
@@ -359,7 +366,7 @@ def eval(x, env=global_env, toplevel=False):
             else:
                 return env.find(x)[x]
 
-        elif not isa(x, list):  # constant literal
+        elif not isa(x, list) or isa(x, list) and len(x) == 0:  # constant literal
             return x
         elif x[0] == 'if':  # (if test conseq alt)
             (_, test, conseq, alt) = x
@@ -390,9 +397,6 @@ def eval(x, env=global_env, toplevel=False):
 
 
         else:  # (proc exp*)
-
-            if x[0] == '.':
-                x[-1] = str(x[-1])
 
             if x[0] in ('require', 'import'):
                 if isa(x[-1], list):  # [require stdlib *]
@@ -471,7 +475,7 @@ def expand(x, toplevel=False):
         # @formatter:off
         if (ara(body, list)                 and
             all(isa(e, list) for e in body) and
-            len(body[0]) > 0                and
+            all(len(e) > 0 for e in body)   and
             all(isa(e[0], list) for e in body)):
             exp = [[args, *mapv(expand, xi)] for args, *xi in body]
         # @formatter:on
@@ -527,10 +531,9 @@ def special_functions():
         global_env['expand'] = expand
         global_env['destructure'] = lambda x: destruct(*zip(*x))
         global_env['/'] = div
+        global_env['*env*'] = global_env
 
-        eval(parse('[import [math *]]'))
-        eval(parse('[import [cmath *]]'))
-        eval(parse('[require [core *]]]'))
+        eval(parse('[require [core *]]]'), global_env)
 
         def macroexpand(form):
             name, *body = form
