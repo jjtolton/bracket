@@ -1,12 +1,10 @@
 ;; https://github.com/HiImJayHireMe/Now_Thats_A_Portfolio/tree/master/bracket_work/advent_of_code/day2/part2
 
-
-
 [defn checksum [. rows]
     [defn evenly-divide [a xs]
           [let [[x . xs] xs]
-               [cond [zero? [mod a x]]  [list a x]
-                     [zero? [mod x a]]  [list x a]
+               [cond [zero? [mod a x]]  [a x]
+                     [zero? [mod x a]]  [x a]
                      [zero? [count xs]] [x nil]
                      -else  [evenly-divide a xs]]]]
 
@@ -22,13 +20,12 @@
                                      srow   [append [subvec row 0 idx]
                                                     [subvec row start end]]
                                      r      [find-divisor x srow]]
-                                [cond [nil? r] [find-divisors [inc idx] row]
-                                     -else    r]]]]
+                                  [if  [nil? r] [find-divisors [inc idx] row] r]]]]
 
-    [let [split-rows [mapv [fn [x]   [. x split]]  rows]
-          int-rows   [mapv [fn [x]   [mapv int x]] split-rows]
-          divisors   [mapv [fn [row] [find-divisors row]] int-rows]
-          checksums  [mapv [fn [[a b]] [div a b]] divisors]]
+    [let [split-rows [mapv [fn [x]     [. x split]]         rows]
+          int-rows   [mapv [fn [x]     [mapv int x]]        split-rows]
+          divisors   [mapv [fn [row]   [find-divisors row]] int-rows]
+          checksums  [mapv [fn [[a b]] [div a b]]           divisors]]
       [apply add checksums]]]
 
 
