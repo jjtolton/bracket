@@ -1,3 +1,5 @@
+;; see https://github.com/HiImJayHireMe/Now_Thats_A_Portfolio/tree/master/bracket_work/advent_of_code/day1/part1
+
 [defn captcha
      ; count captcha per AoC requirements
      ; note that [bracket] like Clojure supports multi-arrity dispatch
