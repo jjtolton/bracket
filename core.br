@@ -235,3 +235,11 @@
 [defn concat [. strs] [. '' join strs]]
 
 [defn s-join [s . ss] [. s join ss]]
+
+[defn take-first [f xs]
+      [let [[x . xs] xs]
+            [if [f x]
+                x
+                [take-first f xs]]]]
+
+[defn nil? [x] [= x nil]]
