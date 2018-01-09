@@ -9,7 +9,7 @@ def loads(s, env=global_env):
     return lib.lang.eval(lib.lang.parse(s), env)
 
 
-def brfn(env, s, *args):
+def brfn(s, *args, env=global_env):
     sargs = ' '.join('{}' for _ in args)
     return loads(f"[{s} {sargs}]".format(*args), env)
 
@@ -39,7 +39,7 @@ global_env['require']('{namespace}')\n''')
                 f.write(f'''{k}=loadbr.loads('{namespace}/{v}')\n''')
 
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
     # print(brfn(global_env, 'add', 1, 2))
     # br2py('stdlib')
-    br2py('fib')
+    # br2py('fib')

@@ -1,0 +1,217 @@
+[import math]
+
+[defn coord
+ [[] [coord 0 0 0]]
+ [[i j v]
+   [let [fns [hashmap -corner [fn [_] [= [py/abs i] [py/abs j]]]
+                      -i      [fn [_] i]
+                      -j      [fn [_] j]
+                      -v      [fn [_] v]
+                      -name   [fn [_] 'coord']
+                      -next   [fn [_] [up-coord 1 0 1]]]
+         fns [assoc fns -map [fn [_] fns]]]
+        [fn [name . args]
+            [let [f [get fns name]]
+                 [apply f args]]]]]]
+
+[defn right-coord [i j v]
+      [let [c [coord i j v]
+            fns [getfns c]
+            fns [assoc fns -name [fn [_] 'right-coord']]
+            fns [assoc fns -next [fn [c] [if [corner? c]
+                                             [up-coord     [inc i] j [inc v]]
+                                             [right-coord  [inc i] j [inc v]]]]]]
+        [fn [name . args]
+           [let [f [get fns name]]
+             [apply f args]]]]]
+
+[defn up-coord [i j v]
+        [let [c [coord i j v]
+              fns [getfns c]
+              fns [assoc fns -name [fn [_] 'up-coord']]
+              fns [assoc fns -next [fn [c] [if [corner? c]
+                                               [left-coord [dec i]      j  [inc v]]
+                                               [up-coord        i  [inc j] [inc v]]]]]]
+        [fn [name . args]
+           [let [f [get fns name]]
+             [apply f args]]]]]
+
+[defn left-coord [i j v]
+        [let [c [coord i j v]
+              fns [getfns c]
+              fns [assoc fns -name [fn [_] 'left-coord']]
+              fns [assoc fns -next [fn [c] [if [corner? c]
+                                               [down-coord      i  [dec j] [inc v]]
+                                               [left-coord [dec i]      j  [inc v]]]]]]
+        [fn [name . args]
+           [let [f [get fns name]]
+             [apply f args]]]]]
+
+
+[defn down-coord [i j v]
+        [let [c [coord i j v]
+              fns [getfns c]
+              fns [assoc fns -name [fn [_] 'down-coord']]
+              fns [assoc fns -next [fn [c] [if [corner? c]
+                                               [right-coord   [inc i]      j  [inc v]]
+                                               [down-coord         i  [dec j] [inc v]]]]]]
+        [fn [name . args]
+           [let [f [get fns name]]
+             [apply f args]]]]]
+
+
+[defn real [x] [x -i x]]
+
+[defn imag [x] [x -j x]]
+
+[defn coval [x] [x -v x]]
+
+[defn next [x] [x -next x]]
+
+[defn name [x] [x -name x]]
+
+[defn corner? [x] [x -corner x]]
+
+[defn getfns [x] [x -map x]]
+
+
+[defn shortest-path [v]
+   [let [dirs     [0 1 -1]
+         deltas   [[1 0] [0 1] [-1 0] [0 -1]]
+         frontier [[1 [0 0]]]
+         seen     []
+         end      [-> v grid last]]
+
+
+         [defn successors
+                   [[p seen] [successors p seen [] deltas]]
+                   [[p seen acc deltas]
+                    [if [empty? deltas]
+                        [seen acc]
+                        [let [[x [i j]]          p
+                             [[di dj] . deltas]  deltas
+                             di [add i di]
+                             dj [add j dj]
+                             delta [di dj]]
+                         [if [not [in? delta seen]]
+                             [let [seen [conj seen delta]]
+                                [successors p
+                                            seen
+                                            [conj acc [[inc x] [list* delta]]]
+                                            deltas]]
+                             [successors p seen acc deltas]]]]]]
+         [defn goal? [lp]
+           [let [[x [i j]] lp]
+             [and [= i [real end]]
+                  [= j [imag end]]]]]
+
+         [defn find-path
+                     [[frontier seen] [find-path frontier seen []]]
+                     [[frontier seen res]
+                       [cond [empty? frontier] res
+                             [empty? res]      [let  [frontier [-> frontier
+                                                                   [[sort-by first]]
+                                                                   py/reversed
+                                                                   list*]
+                                                      p            [last frontier]
+
+                                                      frontier     [butlast frontier]
+                                                      [seen paths] [successors p seen]]
+
+                                                  [find-path frontier seen res paths]]
+                             -else res]]
+                     [[frontier seen res paths]
+                      [if [empty? paths]
+                           [find-path frontier seen res]
+                           [let [[next-path . paths] paths]
+                              [cond  [goal? next-path] [find-path frontier seen [conj res next-path] paths]
+                                     -else             [find-path [conj frontier next-path] seen res paths]]]]]]
+         [-> [find-path frontier seen]
+             first
+             first
+             dec
+             dec]]]
+
+[defn tests []
+
+    [let [c0 [coord 0 0 0]
+          c1 [coord 1 2 0]
+          c2 [right-coord 1 2 0]
+          c3 [right-coord 1 1 0]
+          c4 [next c3]]
+          [assert t [corner? c0]]
+          [assert 0 [real c0]]
+          [assert 0 [imag c0]]
+          [assert 1 [real c1]]
+          [assert 2 [imag c1]]
+          [assert 0 [coval c0]]
+          [assert 0 [coval c0]]
+          [assert 1 [real c2]]
+          [assert 2 [imag c2]]
+          [assert 1 [-> c2 next coval]]
+          [assert 1 [coval c4]]
+          [assert 2 [real c4]]
+          [assert 1 [imag c4]]]
+
+
+    [let [c0 [coord 0 0 0]
+          c1 [next c0]
+          c2 [next c1]
+          c3 [next c2]
+          c4 [next c3]
+          c5 [next c4]
+          c6 [next c5]]
+
+    ]
+
+    [print 'test #1: 1 -> 0']
+    [assert 0 [shortest-path 1]]
+
+    [print 'test #2: 12 -> 3']
+    [assert 3 [shortest-path 12]]
+
+    [print 'test #3: 23 -> 2']
+    [assert 2 [shortest-path 23]]
+
+    [print 'test #4: 1024 -> 31 (stress test)']
+    [assert 31 [shortest-path 1024]]]
+
+
+;; debugging
+
+[defn p-spiral
+   [[c] [print [real c] [imag c] [coval c] [name c]]]
+   [[n c]
+    [cond [zero? n] nil
+          -else     [begin [p-spiral c]
+                           [p-spiral [dec n] [next c]]]]]]
+
+[defn grid [[n] [grid [] [coord] n]]
+     [[acc c n] [cond [zero? n] acc
+                      [let [c [next c]]
+                           [grid [conj acc c] c [dec n]]]]]]
+
+[defn p-grid [g] [mapv [fn [x] [[real x] [imag x] [coval x]]] g]]
+
+[defn value->grid [v] [->> v grid p-grid]]
+
+[defn closest-square [n]
+    [let [closest [-> n math/sqrt [mod 2] zero?]
+          _       [print closest]]
+       [if [not closest]
+           [closest-square [inc n]]
+           [p-grid [grid n]]]]]
+
+[defn sort-grid [g]
+    [->> g
+        [sort-by imag]
+        [sort-by real]
+        py/reversed
+        list*]]
+
+[defn p-seq [xs]
+    [if [empty? xs]
+        py/None
+        [let [[x . xs] xs]
+          [print x]
+          [p-seq xs]]]]
