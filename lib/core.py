@@ -142,6 +142,15 @@ def apply(f, *x):
         args = x
     return f(*args)
 
+
+def kwapply(f, *args):
+    *args, kwargs = args
+    return f(*args, **kwargs)
+
+
+def in_(a, b):
+    return a in b
+
 # 'eval': lambda x: eval(expand(x)),
 # 'load': lambda fn: load(fn),
 

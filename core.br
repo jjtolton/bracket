@@ -1,6 +1,7 @@
 [import lib.core lib]
-[import [lib.core add mul sub div gt lt lte gte exit cons symbol pformat dropv count apply]]
+[import [lib.core add mul sub div gt lt lte gte exit cons symbol pformat dropv count apply sortby kwapply in_]]
 [import [naga append conj first last rest get drop assoc mapv partition inc dec second LazySeq some]]
+[import [naga take]]
 [import naga]
 [import [lib.special_forms Set HashMap]]
 [import operator op]
@@ -242,4 +243,29 @@
                 x
                 [take-first f xs]]]]
 
-[defn nil? [x] [= x nil]]
+[defn nil? [x] [or [= x nil] [= x py/None] [= [type? x] [type? py/None]]]]
+
+[defmacro defprotocol [name . opts+sigs]
+    [print name opts+sigs]
+    [let [[[fname fsigs] . opts+sigs] opts+sigs]
+          [print fname fsigs opts+sigs]
+          [if [nil? [get *env* [py/str fname]]]
+              [let [f `[defn ,fname [,-fsigs] nil]]
+                [print f]
+                [eval f]]]]]
+
+[defn sort [coll] [py/sorted coll]]
+
+[defn sort-by [[key coll] [kwapply py/sorted coll [hashmap 'key' key]]]
+              [[key]      [fn [coll] [sort-by key coll]]]]
+
+[def in? in_]
+
+[defn juxt [. fs]
+   [defn juxt- [x acc fs]
+      [cond [empty? fs] acc
+            -else       [let [[f . fs] fs
+                              acc      [conj acc [f x]]]
+                          [juxt- x acc fs]]]]
+   [fn [x] [juxt- x [] fs]]]
+
