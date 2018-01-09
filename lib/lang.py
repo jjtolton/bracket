@@ -158,12 +158,12 @@ def require_(global_env, n, name=None):
         if items == '*':
             # temp_env = Env(outer=global_env)
             with open(name) as f:
-                for x in read(f.read()):
+                for x in read(f.read())[1:]:
                     try:
                         eval(expand(x), global_env)
                     except Exception as e:
                         print(f'unable to parse {x}')
-                return global_env
+                return None
 
 
 
