@@ -23,5 +23,7 @@ autogensym_ = Sym('autogensym')
 
 # @formatter:on
 
+specforms = [quote_, if_, set_, def_, fn_, begin_, defmacro_]
+
 def PyObject(x):
     return eval(x)

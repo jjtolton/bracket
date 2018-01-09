@@ -1,7 +1,5 @@
 import fractions
 import operator as op
-import sys
-from functools import reduce
 
 import naga
 

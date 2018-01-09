@@ -1,5 +1,5 @@
 [import lib.core lib]
-[import [lib.core add mul sub div gt lt lte gte exit cons symbol pformat dropv count apply sortby kwapply in_]]
+[import [lib.core add mul sub div gt lt lte gte exit cons symbol pformat dropv count apply kwapply in_]]
 [import [naga append conj first last rest get drop assoc mapv partition inc dec second LazySeq some]]
 [import [naga take]]
 [import naga]
