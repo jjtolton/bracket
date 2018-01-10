@@ -1,0 +1,190 @@
+[import math]
+
+[def cdeltas [[-1  1] [0  1] [1  1]
+              [-1  0]        [1  0]
+              [-1 -1] [0 -1] [1 -1]]]
+
+[defn score [c cells]
+   [let [[i j] [[juxt real imag] c]
+         s      0]
+        [defn scoresum [s deltas]
+          [if [empty? deltas]
+                s
+                [let [[[di dj] . deltas] deltas
+                      xi                 [add i di]
+                      xj                 [add j dj]
+                      xs                 [xi xj]
+                      v                  [get cells [tuple xs] 0]
+                      s                  [add s v]]
+                [scoresum s deltas]]]]
+        [or [scoresum s cdeltas] 1]]]
+
+
+[defn coord
+ [[] [coord 0 0 [hashmap]]]
+ [[i j cells]
+   [let [fns [hashmap -corner [fn [_] [= [py/abs i] [py/abs j]]]
+                      -i      [fn [_] i]
+                      -j      [fn [_] j]
+                      -cells  [fn [_] cells]
+                      -v      [fn [c] [let [get-cell [juxt real imag]
+                                            cell     [get-cell c]]
+                                         [or [get cells [tuple cell]]
+                                             [score c cells]]]]
+                      -name   [fn [_] 'coord']
+                      -add-c  [fn [c cell-map] [assoc cells
+                                                      [tuple [[juxt real imag] c]]
+                                                      [score c cells]]]
+                      -next   [fn [c] [up-coord 1 0 [add-c c cells]]]]
+         fns [assoc fns -map [fn [_] fns]]]
+        [fn [name . args]
+            [let [f [get fns name]]
+                 [apply f args]]]]]]
+
+[defn right-coord [i j cells]
+      [let [c [coord i j cells]
+            fns [getfns c]
+            fns [assoc fns -name [fn [_] 'right-coord']]
+            fns [assoc fns -next [fn [c] [if [corner? c]
+                                             [up-coord     [inc i] j [add-c c cells]]
+                                             [right-coord  [inc i] j [add-c c cells]]]]]]
+        [fn [name . args]
+           [let [f [get fns name]]
+             [apply f args]]]]]
+
+[defn up-coord [i j cells]
+        [let [c [coord i j cells]
+              fns [getfns c]
+              fns [assoc fns -name [fn [_] 'up-coord']]
+              fns [assoc fns -next [fn [c] [if [corner? c]
+                                               [left-coord [dec i]      j  [add-c c cells]]
+                                               [up-coord        i  [inc j] [add-c c cells]]]]]]
+        [fn [name . args]
+           [let [f [get fns name]]
+             [apply f args]]]]]
+
+[defn left-coord [i j cells]
+        [let [c [coord i j cells]
+              fns [getfns c]
+              fns [assoc fns -name [fn [_] 'left-coord']]
+              fns [assoc fns -next [fn [c] [if [corner? c]
+                                               [down-coord      i  [dec j] [add-c c cells]]
+                                               [left-coord [dec i]      j  [add-c c cells]]]]]]
+        [fn [name . args]
+           [let [f [get fns name]]
+             [apply f args]]]]]
+
+
+[defn down-coord [i j cells]
+        [let [c [coord i j cells]
+              fns [getfns c]
+              fns [assoc fns -name [fn [_] 'down-coord']]
+              fns [assoc fns -next [fn [c] [if [corner? c]
+                                               [right-coord   [inc i]      j  [add-c c cells]]
+                                               [down-coord         i  [dec j] [add-c c cells]]]]]]
+        [fn [name . args]
+           [let [f [get fns name]]
+             [apply f args]]]]]
+
+
+[defn real [x] [x -i x]]
+
+[defn imag [x] [x -j x]]
+
+[defn coval [x] [x -v x]]
+
+[defn next [x] [x -next x]]
+
+[defn name [x] [x -name x]]
+
+[defn corner? [x] [x -corner x]]
+
+[defn getfns [x] [x -map x]]
+
+[defn get-cells [x] [x -cells x]]
+
+[defn add-c [c cells] [c -add-c c cells]]
+
+[defn grid-val
+   [[n] [grid-val n [coord]]]
+   [[n c]
+          [print n]
+          [if [zero? n]
+              [coval c]
+              [grid-val [dec n] [next c]]]]]
+
+
+[defn tests []
+
+    [print 'test #1: grid 0 -> 1']
+    [assert 1 [grid-val 0]]
+
+    [print 'test #2: grid 1 -> 1']
+    [assert 1 [grid-val 1]]
+
+    [print 'test #3: grid 2 -> 2']
+    [assert 2 [grid-val 2]]
+
+    [print 'test #4: grid 3 -> 4']
+    [assert 4 [grid-val 3]]
+
+    [print 'test #5: grid 4 -> 5']
+    [assert 5 [grid-val 4]]
+
+    [print 'test #6: grid 5 -> 10']
+    [assert 10 [grid-val 5]]
+
+    [print 'test #7: grid 6 -> 11']
+    [assert 11 [grid-val 6]]
+
+    [print 'test #8: grid 7 -> 23']
+    [assert 23 [grid-val 7]]
+
+    [print 'test #9: grid 312051 -> 312453 (stress test ... takes 3 hours to complete #TODO: fix this)']
+    [assert 312453 [grid-val 312051]]]
+
+;; debugging
+
+[defn p-spiral
+   [[c] [print [real c] [imag c] [coval c] [name c]]]
+   [[n c]
+    [cond [zero? n] nil
+          -else     [begin [p-spiral c]
+                           [p-spiral [dec n] [next c]]]]]]
+
+[defn grid [[n] [grid [] [coord] n]]
+     [[acc c n] [cond [zero? n] acc
+                      [let [c [next c]]
+                           [grid [conj acc c] c [dec n]]]]]]
+
+[defn p-grid [g] [mapv [fn [x] [[real x] [imag x] [coval x]]] g]]
+
+[defn value->grid [v] [->> v grid p-grid]]
+
+[defn closest-square [n]
+    [let [closest [-> n math/sqrt [mod 2] zero?]
+          _       [print closest]]
+       [if [not closest]
+           [closest-square [inc n]]
+           [p-grid [grid n]]]]]
+
+[defn sort-grid [g]
+    [->> g
+        [sort-by imag]
+        [sort-by real]
+        py/reversed
+        list*]]
+
+[defn p-seq [xs]
+    [if [empty? xs]
+        py/None
+        [let [[x . xs] xs]
+          [print x]
+          [p-seq xs]]]]
+
+[defn p-covals [[n] [p-covals n [coord]]]
+             [[n c]
+              [print [[juxt real imag coval name get-cells] c]]
+              [if [zero? n]
+                   nil
+                   [p-covals [dec n] [next c]]]]]]
