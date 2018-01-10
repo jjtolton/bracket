@@ -3,8 +3,10 @@ import sys
 import traceback
 
 from prompt_toolkit import prompt as repl_prompt
+from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.contrib.completers import WordCompleter
-from prompt_toolkit.history import InMemoryHistory
+from prompt_toolkit.history import InMemoryHistory, FileHistory
+from prompt_toolkit.layout.processors import HighlightMatchingBracketProcessor
 from pygments.style import Style
 from pygments.styles.default import DefaultStyle
 from pygments.token import Token
@@ -56,12 +58,14 @@ def prompt_continuation(_, width):
 
 def repl(prompt='$-> ', out=sys.stdout, debug=False, env=global_env):
     "A prompt-read-eval-print loop."
-    history = InMemoryHistory()
+    history = FileHistory('history.log')
+    processor = HighlightMatchingBracketProcessor()
     while True:
         try:
             words = WordCompleter([*env.keys(), *macro_table.keys(), *map(str, specforms)])
             text = repl_prompt(message=prompt, completer=words, history=history, style=DocumentStyle, multiline=True,
-                               get_continuation_tokens=prompt_continuation)
+                               get_continuation_tokens=prompt_continuation,
+                               auto_suggest=AutoSuggestFromHistory(), extra_input_processors=[processor])
             x = parse(text)
             if x is eof_object:
                 return
@@ -76,7 +80,10 @@ def repl(prompt='$-> ', out=sys.stdout, debug=False, env=global_env):
         except EOFError:
             sys.exit('bye!')
         except Exception as e:
-            print('%s: %s' % (type(e).__name__, '\n'.join(traceback.format_tb(e.__traceback__, limit=10))))
+            etype = type(e)
+            ename = etype.__name__
+            tb = '\n'.join(traceback.format_tb(e.__traceback__, limit=20))
+            print(f'{etype}: {ename}\n{tb}\n\n{e}')
             if debug is True:
                 raise e
 
