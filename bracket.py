@@ -1,13 +1,11 @@
-import pprint
 import sys
 import traceback
 
 from prompt_toolkit import prompt as repl_prompt
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.contrib.completers import WordCompleter
-from prompt_toolkit.history import InMemoryHistory, FileHistory
+from prompt_toolkit.history import FileHistory
 from prompt_toolkit.layout.processors import HighlightMatchingBracketProcessor
-from pygments.formatters.html import HtmlFormatter
 from pygments.lexers.jvm import ClojureLexer
 from pygments.style import Style
 from pygments.styles.default import DefaultStyle
