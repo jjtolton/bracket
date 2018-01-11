@@ -7,6 +7,8 @@
 [import operator op]
 [import itertools]
 [import pickle]
+[import [functools reduce]]
+[import time]
 
 [defmacro . [obj attr . args]
             [let [attr [py/str attr]]
@@ -42,6 +44,8 @@
 [def tuple py/tuple]
 
 [defn int? [x] [isa? x int]]
+
+[defn float? [x] [isa? x float]]
 
 [defn mod [a b] [op/mod a b]]
 
@@ -164,67 +168,6 @@
 [defmacro threadlast [. exps] `[->> ,-exps]]
 
 
-[defn kw->fn- [exp]
-   [let [replace [.- exp replace]
-         r       [replace '-' '']
-         join    [.- '' join]]
-         [join   [list r '-']]]]
-
-
-[defmacro pre-for
-           [[bindings body]
-            [let [bindings [mapv list* [partition 2 bindings]]]
-                  `[pre-for [] ,bindings ,body]]]
-
-           [[acc bindings body]
-            [if [empty? bindings]
-                `/[-> ,body ,-acc]
-                [let [[exp . bindings] bindings
-                      [f s] exp
-                      sx   [set /[-for -when -while -let]]
-                      kw?  [sx f]]
-                   [if kw?
-                       `[pre-for ,[conj acc [list [kw->fn- f] s]] [,-bindings] ,body]
-                       `[pre-for ,[conj acc [list /for- [f s]]] [,-bindings] ,body]]]]]]
-
-
-[defmacro for
-          [[bindings body] `[for [] [] ,bindings ,body]]
-          [[acc body-acc bindings body]
-           [print bindings]
-           ;[let [[a b] bindings]
-           ;   [print [get &env 'a']]
-           ;   [print [eval `,b &env]]
-           ;   ]
-           [if [empty? bindings]
-               [begin [import [lib.loadbr brfn]]
-                      [let [globals   [. [py/globals] update [hashmap 'brfn' brfn 'global_env' &env]]
-                            for-loop  [pformat '[[{}] {}]' [. ', ' join body-acc] [. ' ' join acc]]
-                            _         [print for-loop]
-                            results   [py/eval for-loop globals &env]
-                            f         `[fn [,body-acc] ,body]
-                            r          `[mapv ,f ,results]]
-                            [print f]
-                            [print r]
-                            r]]
-               [let [[a b . bindings] bindings]
-                    [case a
-                          -when [let [b-args [mapv [fn [x] [-> x py/str [. replace '\'', '']]] [subvec b 1]]
-                                      b      [cons b b-args]
-                                      py-if  [pformat 'if brfn(*{})' b]]
-                                  `[for [,-acc ,py-if] ,body-acc ,bindings ,body]]
-                         -while `[for ,acc ,[conj bindings -when b] ,body]
-
-                          ; for
-                          [let [args   [. ', ' join [mapv py/str [subvec b 1]]]
-                               bfmt    [pformat 'brfn(*{})' b]
-                               py-for  [pformat 'for {} in {}' a bfmt]]
-                            `[for [,-acc ,py-for] [,-body-acc ,a] ,bindings ,body]]]]]]]
-
-
-; [defmacro for2 [[seq-exprs body-expr]]
-
-
 [defn take-while
       [[pred xs]     [take-while [] pred xs]]
       [[acc pred xs] [cond       [empty? xs]       acc
@@ -238,10 +181,12 @@
 [defn s-join [s . ss] [. s join ss]]
 
 [defn take-first [f xs]
-      [let [[x . xs] xs]
-            [if [f x]
-                x
-                [take-first f xs]]]]
+      [if [empty? xs]
+          nil
+          [let [[x . xs] xs]
+                [if [f x]
+                    x
+                    [take-first f xs]]]]]
 
 [defn nil? [x] [or [= x nil] [= x py/None] [= [type? x] [type? py/None]]]]
 
@@ -261,11 +206,92 @@
 
 [def in? in_]
 
-[defn juxt [. fs]
-   [defn juxt- [x acc fs]
-      [cond [empty? fs] acc
-            -else       [let [[f . fs] fs
-                              acc      [conj acc [f x]]]
-                          [juxt- x acc fs]]]]
-   [fn [x] [juxt- x [] fs]]]
+[defn juxt [. fs] [fn [x] [mapv [fn [f] [f x]] fs]]]
 
+
+[defmacro timed [form]
+   `[let [t [time/time]
+          r ,[form]]
+      [print [sub [time/time] t]]
+      r]]
+
+[defn fnil [f . defaults]
+  [defn get-args [acc defaults xs]
+     [if [or [empty? defaults]
+             [empty? xs]]
+         [append acc xs]
+         [let [[d . defaults] defaults
+               [x . xs]       xs
+               acc            [conj acc [or x d]]]
+            [get-args acc defaults xs]]]]
+  [fn [. xs]
+    [let [args [get-args [] defaults xs]]
+      [print args]
+      [apply f args]]]]
+
+
+[defn comp
+  [[] identity]
+  [[f . fs]
+   [defn apply-comp
+             [[x] [let [a        f
+                        [b . xs] [conj fs x]]
+                     [apply apply-comp a b xs]]]
+             [[a b] [let [f a x b] [f x]]]
+             [[a b . xs] [let [f a
+                               x [apply apply-comp b xs]]
+                               [f x]]]]
+   [fn [x] [apply-comp x]]]]
+
+[defn complement [f] [fn [. xs] [not [apply f xs]]]]
+
+[defn constantly [x] [fn [. xs] x]]
+
+[defn identity [x] x]
+
+[defn partial [f . xs] [fn [. args] [apply f [apply conj xs args]]]]
+
+[def map py/map]
+
+[def filter py/filter]
+
+[defn every-pred [. ps]
+   [defn all? [[]       t]
+              [[x]      [let [v? [take-first false? [reductions [fn [x p] [cond [false? x] f [p x] x -else f]] ps x]]]
+                             [if [nil? v?] x f]]]
+              [[x xs]   [and [all? x] [apply all? xs]]]
+              [[x . xs] [all? x xs]]]
+   [fn [. xs] [apply all? xs]]]
+
+[defn every? [p]
+  [fn [[]      t]
+      [[x] [p x]]
+      [[. xs]
+        [let [t? [take-first false? [reductions [fn [x a] [cond [false? x] a [p a] a -else f]] xs]]]
+                [if [nil? t?]
+                    t f]]]]]
+
+[defn some-fn [. ps]
+   [fn [. xs] [if [take-first [fn [p] [take-first p xs]] ps] t f]]]
+
+
+
+[defn fpartial [f . xs] [fn [. ys] [apply f [append ys xs]]]]
+
+[defn assoc! [m k v] [. m __setitem__ k v] m]
+
+[defn update! [[m k f . xs] [->> k
+                           [[fn [x] [. m __getitem__ x]]]
+                           [[apply partial f xs]]
+                           [[fn [x] [. m __setitem__ k x]]]
+                           [[constantly m]]]]
+              [[m k f]  [->> k
+                           [[fn [x] [. m __getitem__ x]]]
+                           f
+                           [[fn [x] [. m __setitem__ k x]]]
+                           [[constantly m]]]]]
+
+
+[defn reductions [. xs] [lazy-seq [apply naga/reductions xs]]]
+
+[defn falsey? [x] [if x x f]]
