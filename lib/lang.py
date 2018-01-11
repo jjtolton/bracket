@@ -7,7 +7,7 @@ from naga import mapv
 from lib.destructure import destruct
 from lib.macros import defn, macro_table, _let
 from lib.special_forms import KeyWord
-from lib.core import div
+from lib.core import div, nil
 from lib.symbols import Symbol, PyObject, quote_, quasiquote_, unquote_, unquotesplicing_, begin_, if_, def_, defmacro_, \
     fn_, append_, cons_, autogensym_, let_
 from lib.utils import isa, to_string, ara, flatten, AutoGenSym
@@ -370,7 +370,7 @@ def eval(x, env=global_env, toplevel=False):
             return x
         elif x[0] == 'if':  # (if test conseq alt)
             (_, test, conseq, alt) = x
-            x = (conseq if eval(test, env) not in (None, False) else alt)
+            x = (conseq if eval(test, env) not in (None, False, nil) else alt)
         elif x[0] == 'def':  # (define var exp)
             (_, var, exp) = x
             env[var] = eval(exp, env)
