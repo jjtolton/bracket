@@ -1,7 +1,9 @@
 import fractions
 import operator as op
+from functools import lru_cache
 
 import naga
+import pickle
 
 from lib.symbols import Symbol
 from lib.utils import isa
@@ -148,6 +150,59 @@ def kwapply(f, *args):
 
 def in_(a, b):
     return a in b
+
+
+def memo(fn=None, max_cachesize=32):
+    @decorator
+    def newmemo(fn):
+        def _call(*args, **kwargs):
+            return fn(*args, **kwargs)
+
+        return _call
+
+    @decorator
+    def _memo(fn):
+
+        @lru_cache(maxsize=max_cachesize)
+        def newfn(args, kwargs):
+            to_args = []
+            for arg in args:
+                try:
+                    to_args.append(pickle.loads(arg))
+                except TypeError:
+                    to_args.append(arg)
+
+            _args = tuple(to_args)
+            _kwargs = pickle.loads(kwargs)
+            return fn(*_args, **_kwargs)
+
+        def _call(*args, **kwargs):
+            to_args = []
+            for arg in args:
+                try:
+                    to_args.append(pickle.dumps(arg))
+                except (pickle.PicklingError, TypeError):
+                    to_args.append(arg)
+
+            _args = tuple(to_args)
+
+            _kwargs = pickle.dumps(kwargs)
+            return newfn(_args, _kwargs)
+
+        return _call
+
+    if isinstance(fn, int):
+        return memo(newmemo, max_cachesize=max_cachesize)
+    else:
+        return _memo(fn)
+
+
+
+
+
+
+
+
 
 # 'eval': lambda x: eval(expand(x)),
 # 'load': lambda fn: load(fn),

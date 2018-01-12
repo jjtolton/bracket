@@ -7,17 +7,15 @@
 [defn score [c cells]
    [let [[i j] [[juxt real imag] c]
          s      0]
-        [defn scoresum [s deltas]
-          [if [empty? deltas]
-                s
-                [let [[[di dj] . deltas] deltas
-                      xi                 [add i di]
-                      xj                 [add j dj]
-                      xs                 [xi xj]
-                      v                  [get cells [tuple xs] 0]
-                      s                  [add s v]]
-                [scoresum s deltas]]]]
-        [or [scoresum s cdeltas] 1]]]
+        [let [v [reduce [fn [s [di dj]]
+                          [let [xi [add i di]
+                                xj [add j dj]
+                                xs [xi xj]
+                                v  [get cells [tuple xs] 0]]
+                             [add s v]]]
+                         cdeltas
+                         0]]
+          [if [zero? v] 1 v]]]]
 
 
 [defn coord
@@ -32,11 +30,9 @@
                                          [or [get cells [tuple cell]]
                                              [score c cells]]]]
                       -name   [fn [_] 'coord']
-                      -add-c  [fn [c cell-map] [assoc cells
-                                                      [tuple [[juxt real imag] c]]
-                                                      [score c cells]]]
+                      -add-c  [fn [c cell-map] [assoc! cell-map [tuple [[juxt real imag] c]] [score c cell-map]]]
                       -next   [fn [c] [up-coord 1 0 [add-c c cells]]]]
-         fns [assoc fns -map [fn [_] fns]]]
+         fns [assoc! fns -map [fn [_] fns]]]
         [fn [name . args]
             [let [f [get fns name]]
                  [apply f args]]]]]]
@@ -44,8 +40,8 @@
 [defn right-coord [i j cells]
       [let [c [coord i j cells]
             fns [getfns c]
-            fns [assoc fns -name [fn [_] 'right-coord']]
-            fns [assoc fns -next [fn [c] [if [corner? c]
+            fns [assoc! fns -name [fn [_] 'right-coord']]
+            fns [assoc! fns -next [fn [c] [if [corner? c]
                                              [up-coord     [inc i] j [add-c c cells]]
                                              [right-coord  [inc i] j [add-c c cells]]]]]]
         [fn [name . args]
@@ -55,8 +51,8 @@
 [defn up-coord [i j cells]
         [let [c [coord i j cells]
               fns [getfns c]
-              fns [assoc fns -name [fn [_] 'up-coord']]
-              fns [assoc fns -next [fn [c] [if [corner? c]
+              fns [assoc! fns -name [fn [_] 'up-coord']]
+              fns [assoc! fns -next [fn [c] [if [corner? c]
                                                [left-coord [dec i]      j  [add-c c cells]]
                                                [up-coord        i  [inc j] [add-c c cells]]]]]]
         [fn [name . args]
@@ -66,8 +62,8 @@
 [defn left-coord [i j cells]
         [let [c [coord i j cells]
               fns [getfns c]
-              fns [assoc fns -name [fn [_] 'left-coord']]
-              fns [assoc fns -next [fn [c] [if [corner? c]
+              fns [assoc! fns -name [fn [_] 'left-coord']]
+              fns [assoc! fns -next [fn [c] [if [corner? c]
                                                [down-coord      i  [dec j] [add-c c cells]]
                                                [left-coord [dec i]      j  [add-c c cells]]]]]]
         [fn [name . args]
@@ -78,8 +74,8 @@
 [defn down-coord [i j cells]
         [let [c [coord i j cells]
               fns [getfns c]
-              fns [assoc fns -name [fn [_] 'down-coord']]
-              fns [assoc fns -next [fn [c] [if [corner? c]
+              fns [assoc! fns -name [fn [_] 'down-coord']]
+              fns [assoc! fns -next [fn [c] [if [corner? c]
                                                [right-coord   [inc i]      j  [add-c c cells]]
                                                [down-coord         i  [dec j] [add-c c cells]]]]]]
         [fn [name . args]
@@ -105,39 +101,66 @@
 
 [defn add-c [c cells] [c -add-c c cells]]
 
-[defn grid-val
-   [[n] [grid-val n [coord]]]
-   [[n c]
-      [if [zero? n]
-          [coval c]
-          [grid-val [dec n] [next c]]]]]
+[defn grid-val [n] [coval [reduce [fn [c _] [next c]] [range n] [coord]]]]
 
 
 [defn tests []
 
     [print 'test #1: grid 0      -> 1']
-    [assert 1 [grid-val 0]]
+    [timed [assert 1 [grid-val 0]]]
 
     [print 'test #2: grid 1      -> 1']
-    [assert 1 [grid-val 1]]
+    [timed [assert 1 [grid-val 1]]]
 
     [print 'test #3: grid 2      -> 2']
-    [assert 2 [grid-val 2]]
+    [timed [assert 2 [grid-val 2]]]
 
     [print 'test #4: grid 3      -> 4']
-    [assert 4 [grid-val 3]]
+    [timed [assert 4 [grid-val 3]]]
 
     [print 'test #5: grid 4      -> 5']
-    [assert 5 [grid-val 4]]
+    [timed [assert 5 [grid-val 4]]]
 
     [print 'test #6: grid 5      -> 10']
-    [assert 10 [grid-val 5]]
+    [timed [assert 10 [grid-val 5]]]
 
     [print 'test #7: grid 6      -> 11']
-    [assert 11 [grid-val 6]]
+    [timed [assert 11 [grid-val 6]]]
 
     [print 'test #8: grid 7      -> 23']
-    [assert 23 [grid-val 7]]
+    [timed [assert 23 [grid-val 7]]]
 
     [print 'test #9: grid 312051 -> 312453 (stress test ... takes over 5 hours to complete #TODO: fix this!!)']
-    [assert 312453 [grid-val 312051]]]
+    [timed [assert 312453 [grid-val 312051]]]]
+
+[defn stress-test []
+    [print 'test 2']
+    [timed [grid-val 2]]
+
+    [print 'test 4']
+    [timed [grid-val 4]]
+
+    [print 'test 8']
+    [timed [grid-val 8]]
+
+    [print 'test 16']
+    [timed [grid-val 16]]
+
+    [print 'test 32']
+    [timed [grid-val 32]]
+
+    [print 'test 64']
+    [timed [grid-val 64]]
+
+    [print 'test 128']
+    [timed [grid-val 128]]
+
+    [print 'test 256']
+    [timed [grid-val 256]]
+
+    [print 'test 512']
+    [timed [grid-val 512]]
+
+    [print 'test 1024']
+    [timed [grid-val 1025]]]
+

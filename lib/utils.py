@@ -27,7 +27,9 @@ class AutoGenSym:
     def __init__(self):
         self.x = 0
 
-    def __call__(self, s):
+    def __call__(self, s=None):
+        if s is None:
+            return self('')
         x_ = f'{s}{self.x}'
         self.x += 1
         return Symbol(x_)

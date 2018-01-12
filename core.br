@@ -1,7 +1,7 @@
 [import lib.core lib]
 [import [lib.core add mul sub div gt lt lte gte exit cons symbol pformat dropv count apply kwapply in_]]
-[import [naga append conj first last rest get drop assoc mapv partition inc dec second LazySeq some]]
-[import [naga take]]
+[import [naga append conj first last rest get drop assoc mapv partition inc dec second LazySeq some update]]
+[import [naga take interleave]]
 [import naga]
 [import [lib.special_forms Set HashMap]]
 [import operator op]
@@ -9,6 +9,9 @@
 [import pickle]
 [import [functools reduce]]
 [import time]
+[import [lib.utils AutoGenSym]]
+
+[def symgen [AutoGenSym]]
 
 [defmacro . [obj attr . args]
             [let [attr [py/str attr]]
@@ -71,7 +74,10 @@
 
 [def bool py/bool]
 
-[def range py/range]
+[defn gensym [] [symgen 'G__']]
+
+[defn range [[]     [itertools/count]]
+            [[. xs] [apply py/range xs]]]
 
 [defn subvec [[]                     []]
              [[xs]                   xs]
@@ -161,6 +167,53 @@
                       [f . body] [if [list? form] form [list form]]]
                       `[->> [,f ,-body ,e] ,-forms]]]
    [[e] e]]
+
+
+
+[defmacro as-> [expr name . forms]
+   `[let [,name ,expr
+          ,-[interleave [repeat name] [butlast forms]]]
+       ,[if [empty? forms]
+          name
+          [last forms]]]]
+
+[defmacro cond-> [expr . clauses]
+  [let [g [gensym]
+        steps [mapv [fn [[test step]] `[if ,test [-> ,g ,step] ,g]] [partition 2 clauses]]]
+    `[let [,g ,expr
+          ,-[interleave [repeat g] [butlast steps]]]
+        ,[if [empty? steps]
+             g
+             [last steps]]]]]
+
+[defmacro cond->> [expr . clauses]
+  [let [g [gensym]
+        steps [mapv [fn [[test step]] `[if ,test [->> ,g ,step] ,g]] [partition 2 clauses]]]
+    `[let [,g ,expr
+          ,-[interleave [repeat g] [butlast steps]]]
+        ,[if [empty? steps]
+             g
+             [last steps]]]]]
+
+[defmacro some-> [expr . forms]
+  [let [g [gensym]
+        steps [mapv [fn [step] `[if [nil? ,g] nil [-> ,g ,step]]]
+                                forms]]
+    `[let [,g ,expr
+          ,-[interleave [repeat g] [butlast steps]]]
+        ,[if [empty? steps]
+             g
+             [last steps]]]]]
+
+[defmacro some->> [expr . forms]
+  [let [g [gensym]
+        steps [mapv [fn [step] `[if [nil? ,g] nil [->> ,g ,step]]]
+                                forms]]
+    `[let [,g ,expr
+          ,-[interleave [repeat g] [butlast steps]]]
+        ,[if [empty? steps]
+             g
+             [last steps]]]]]
 
 
 [defmacro threadfirst [. exps] `[-> ,-exps]]
@@ -295,3 +348,44 @@
 [defn reductions [. xs] [lazy-seq [apply naga/reductions xs]]]
 
 [defn falsey? [x] [if x x f]]
+
+[defn repeat [x] [lazy-seq [itertools/cycle [x]]]]
+
+[def memoize lib/memo]
+
+[defmacro if-let [[bindings then] `[if-let ,bindings ,then nil]]
+         [[bindings then else . oldform]
+          [let [form [get bindings 0]
+                tst  [get bindings 1]
+                g    [gensym]]
+            `[let [,g ,tst]
+              [if ,g
+                [let [,form ,g]
+                  ,then]
+               ,else]]]]]
+
+
+[defmacro if-some
+  [[bindings then] `[if-some ,bindings ,then nil]]
+  [[bindings then else . oldform]
+    [let [form [get bindings 0]
+          tst  [get bindings 1]
+          g    [gensym]]
+    `[let [,g ,tst]
+          [if [nil? ,g]
+            ,else
+            [let [,form ,g]
+               ,then]
+               ]]]]]
+
+[defmacro when-let
+  [[bindings . body]
+   [let [form  [get bindings 0]
+         tst   [get bindings 1]
+         g     [gensym]]
+    `[let [,g ,tst]
+       [when ,g
+         [let [,form ,g]
+           ,-body]]]]]]
+
+

@@ -11,34 +11,34 @@ from pygments.style import Style
 from pygments.styles.default import DefaultStyle
 from pygments.token import Token
 
-from lib.lang import global_env, special_functions, parse, eof_object, eval
-# def repl(prompt='$-> ', inport=InPort(sys.stdin), out=sys.stdout, debug=False):
-#     "A prompt-read-eval-print loop."
-#     while True:
-#         try:
-#             if prompt:
-#                 print(prompt, end=' ', flush=True)
-#
-#             x = parse(inport)
-#             if x is eof_object:
-#                 return
-#             val = eval(x, env=global_env)
-#             if val is not None and out:
-#                 output = to_string(val)
-#                 print(f';;=> {output}', file=out)
-#             continue
-#         except KeyboardInterrupt:
-#             print()
-#             continue
-#         except Exception as e:
-#             print('%s: %s' % (type(e).__name__, e))
-#             if debug is True:
-#                 raise e
-#                 # finally:
-#                 #     repl(debug=__debug__)
-#
+from lib.lang import global_env, special_functions, parse, eof_object, eval, InPort
+
+
+def debug_repl(prompt='$-> ', inport=InPort(sys.stdin), out=sys.stdout, env=global_env):
+    "A prompt-read-eval-print loop."
+    while True:
+        try:
+            if prompt:
+                print(prompt, end=' ', flush=True)
+
+            x = parse(inport)
+            if x is eof_object:
+                return
+            val = eval(x, env=env)
+            if val is not None and out:
+                output = to_string(val)
+                print(f';;=> {output}', file=out)
+            continue
+        except KeyboardInterrupt:
+            print()
+            continue
+        except Exception as e:
+            print('%s: %s' % (type(e).__name__, e))
+            raise e
+
+
 from lib.macros import macro_table
-from lib.symbols import specforms
+from lib.symbols import specforms, Symbol
 from lib.utils import to_string
 
 
@@ -193,6 +193,8 @@ def repl(prompt='$-> ', out=sys.stdout, debug=False, env=global_env):
                 return
             val = eval(x, env=env)
             if val is not None and out:
+                if not isinstance(val, (dict, str, Symbol)) and hasattr(val, '__iter__'):
+                    val = list(val)
                 output = to_string(val)
                 print(f';;=> {output}', file=out)
             continue
@@ -211,6 +213,10 @@ def repl(prompt='$-> ', out=sys.stdout, debug=False, env=global_env):
 
 
 if __name__ == '__main__':
+    if __debug__ is True:
+        repl = debug_repl
+    else:
+        repl = repl
     print("Welcome to [bracket]!")
     special_functions()
     repl(env=global_env)

@@ -324,16 +324,19 @@ class MacroContext(ApplicationContext):
     def __init__(self):
         self.old = {Procedure.__name__: Procedure,
                     Proc.__name__: Proc,
-                    expand_exp.__name__: expand_exp}
+                    # expand_exp.__name__: expand_exp
+                    }
 
         self.new = {Procedure.__name__: Macro,
                     Proc.__name__: Mac,
-                    expand_exp.__name__: self.old[expand_exp.__name__]}
+                    # expand_exp.__name__: self.old[expand_exp.__name__]
+                    }
 
-    @staticmethod
-    def expand_exp(env, x):
-        proc = eval(x.pop(0), env)
-        return proc, x
+    # @staticmethod
+    # def expand_exp(env, x):
+    #     print('internal eval', x)
+    #     proc = eval(x.pop(0), env)
+    #     return proc, x
 
     def __enter__(self):
         globals().update(self.new)
@@ -389,7 +392,6 @@ def eval(x, env=global_env, toplevel=False):
                 exp = [list(exp)]
             else:
                 (_, exp) = x
-            # with ProcedureContext():
             return Procedure(env, exp)
         elif x[0] is quote_:
             _, q = x
