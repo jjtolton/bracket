@@ -24,7 +24,7 @@ def debug_repl(prompt='$-> ', inport=InPort(sys.stdin), out=sys.stdout, env=glob
             x = parse(inport)
             if x is eof_object:
                 return
-            val = eval(x, env=env)
+            val = eval(x, env=env, toplevel=True)
             if val is not None and out:
                 output = to_string(val)
                 print(f';;=> {output}', file=out)
@@ -218,5 +218,5 @@ if __name__ == '__main__':
     else:
         repl = repl
     print("Welcome to [bracket]!")
-    special_functions()
+    # special_functions()
     repl(env=global_env)

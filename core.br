@@ -102,7 +102,7 @@
                      [assert exp res msg]]]
     [[exp res msg] [if [= exp res]
                        true
-                       [begin [print msg] false]]]]
+                       [do [print msg] false]]]]
 
 
 [defn hashmap [[] [py/dict]]
@@ -138,7 +138,7 @@
        `[let [y ,x] [if y y [or ,-xs]]]]]
 
 
-[defmacro when [test . body] `[if ,test [begin ,-body]]]
+[defmacro when [test . body] `[if ,test [do ,-body]]]
 
 [defmacro cond
           [[a] a]
@@ -399,7 +399,7 @@
 
 [defmacro when-not
   [test . body]
-    `[if ,test nil [begin ,-body]]]
+    `[if ,test nil [do ,-body]]]
 
 [defn max-key [x key] [kwapply py/max x [hashmap 'key' key]]]
 

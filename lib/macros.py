@@ -1,7 +1,7 @@
 from naga import partition, mapv
 
 from lib.destructure import destruct
-from lib.symbols import def_, fn_, quote_, begin_
+from lib.symbols import def_, fn_, quote_, do_
 from lib.utils import isa
 
 
@@ -9,15 +9,8 @@ def quote(sym):
     return [quote_, sym]
 
 
-def defn(*args):
-    name, *exps = args
-    # @formatter:off
-    if (len(exps) == 2 and
-        isa(exps[0], list) and
-        len(exps[0]) == 0):
-        return [def_, name, [fn_, [[], exps[1]]]]
-    # @formatter:on
-    res = [def_, name, [fn_, *exps]]
+def defn(name, *exps):
+    res = [def_, name, [fn_, name, *exps]]
     return res
 
 
@@ -25,7 +18,7 @@ def let(forms, *exps):
     if forms == []:
         return _let([], [], exps)
     forms = mapv(list, partition(2, forms))
-    return _let(*zip(*forms), [begin_, *exps])
+    return _let(*zip(*forms), [do_, *exps])
 
 
 def _let(bindings, args, exps):

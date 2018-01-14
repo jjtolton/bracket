@@ -1,16 +1,19 @@
 import io
 import re
-from functools import partial
+from functools import partial, reduce
 
+import itertools
 from naga import mapv
 
 from lib.destructure import destruct
 from lib.macros import defn, macro_table, _let
 from lib.special_forms import KeyWord
 from lib.core import div, nil
-from lib.symbols import Symbol, PyObject, quote_, quasiquote_, unquote_, unquotesplicing_, begin_, if_, def_, defmacro_, \
+from lib.symbols import Symbol, PyObject, quote_, quasiquote_, unquote_, unquotesplicing_, do_, if_, def_, defmacro_, \
     fn_, append_, cons_, autogensym_, let_
 from lib.utils import isa, to_string, ara, flatten, AutoGenSym
+
+gensym = AutoGenSym()
 
 
 class InPort(object):
@@ -166,8 +169,6 @@ def require_(global_env, n, name=None):
                 return None
 
 
-
-
 eof_object = Symbol('#<eof-object>')  # Note: uninterned; can't be read
 
 
@@ -208,7 +209,7 @@ quotes = {"/":  quote_,
 
 def read(inport: (type(InPort), str)):
     if isa(inport, str):
-        return read(InPort(io.StringIO(f'[begin {inport}]')))
+        return read(InPort(io.StringIO(f'[do {inport}]')))
 
     def _read(t):
         res = []
@@ -235,7 +236,7 @@ def read(inport: (type(InPort), str)):
 
 def parse(x):
     data = read(x)
-    return expand(data)
+    return data
 
 
 user_macros = {}
@@ -245,7 +246,7 @@ class Proc:
     "A user-defined Scheme procedure."
 
     def __init__(self, parms, exp, env):
-        self.parms, self.exp, self.env = parms, [begin_, *exp], env
+        self.parms, self.exp, self.env = parms, exp, env
 
     def __call__(self, *args):
         let1 = _let(self.parms, list(args), self.exp)
@@ -253,7 +254,10 @@ class Proc:
 
 
 class Procedure:
-    def __init__(self, env, forms):
+    def __init__(self, env, forms, name, doc, opts):
+        self.opts = opts
+        self.doc = doc
+        self.name = name
         self.procs = []
         self.variadic = None
         for form in forms:
@@ -274,27 +278,6 @@ class Procedure:
             return self.variadic
 
 
-class ApplicationContext:
-    @staticmethod
-    def expand_exp(env, x):
-        proc = eval(x.pop(0), env)
-        return proc, x
-
-    @classmethod
-    def __enter__(cls):
-        globals().update(cls.new)
-
-    @classmethod
-    def __exit__(cls, exc_type, exc_val, exc_tb):
-        globals().update(cls.old)
-
-
-def expand_exp(env, x):
-    exps = [eval(exp, env) for exp in x]
-    proc = exps.pop(0)
-    return proc, exps
-
-
 class Mac(Proc):
     def __call__(self, *args, **kwargs):
         if '.' in self.parms:
@@ -302,7 +285,7 @@ class Mac(Proc):
             idx = self.parms.index('.')
             args = args[:idx] + [args[idx:]]
             # TODO: possible trouble spot
-            parms = self.parms[:idx] + self.parms[idx+1:]
+            parms = self.parms[:idx] + self.parms[idx + 1:]
         else:
             parms = self.parms
 
@@ -310,7 +293,7 @@ class Mac(Proc):
 
 
 class Macro(Procedure):
-    def __init__(self, env, forms):
+    def __init__(self, env, forms, name, doc, opts):
         self.procs = []
         self.variadic = None
         for form in forms:
@@ -320,48 +303,29 @@ class Macro(Procedure):
             self.procs.append(Mac(args, exps, env))
 
 
-class MacroContext(ApplicationContext):
-    def __init__(self):
-        self.old = {Procedure.__name__: Procedure,
-                    Proc.__name__: Proc,
-                    # expand_exp.__name__: expand_exp
-                    }
-
-        self.new = {Procedure.__name__: Macro,
-                    Proc.__name__: Mac,
-                    # expand_exp.__name__: self.old[expand_exp.__name__]
-                    }
-
-    # @staticmethod
-    # def expand_exp(env, x):
-    #     print('internal eval', x)
-    #     proc = eval(x.pop(0), env)
-    #     return proc, x
-
-    def __enter__(self):
-        globals().update(self.new)
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        globals().update(self.old)
-
-
-class ProcedureContext(ApplicationContext):
-    new = {Procedure.__name__: Procedure,
-           Proc.__name__: Proc,
-           expand_exp.__name__: expand_exp}
-
-    old = {}
-
-
 global_env = Env(name=__name__)
+
+
+def alldiff(xs):
+    return len(set(xs)) != len(list(xs))
+
+
+def compoundfn(x):
+    if not ara(x, list):
+        return False
+    if not ara([xi[0] for xi in x], list):
+        return False
+    if not alldiff(len(xi[0]) for xi in x):
+        return False
+    return True
 
 
 def eval(x, env=global_env, toplevel=False):
     "Evaluate an expression in an environment."
-    # if toplevel is True:
-    #     return eval(expand(x), env)
 
     while True:
+
+        # base case 1: binding
         if isa(x, Symbol):  # variable reference
             if '/' in x:
                 n, m = x.split('/')
@@ -374,28 +338,75 @@ def eval(x, env=global_env, toplevel=False):
         elif x[0] == 'if':  # (if test conseq alt)
             (_, test, conseq, alt) = x
             x = (conseq if eval(test, env) not in (None, False, nil) else alt)
+
+            # if x[0] == defmacro_:
+            # compound form only!!
+            # require(x[1:], compoundfn, msg="Compound form required for macro")
+
+            # _, name, body = eval(defn(*x[1:]))
+            # require(x, toplevel, "define-macro only allowed at top level")
+            # macro = Macro(env, body, name, doc, opts)
+            # proc = eval(body)
+            # require(x, callable(proc), "macro must be a procedure")
+            # macro_table[name] = macro  # (define-macro v proc)
+            # return None  # => None; add v:proc to macro_table
+
         elif x[0] == 'def':  # (define var exp)
             (_, var, exp) = x
             env[var] = eval(exp, env)
             return None
-        elif x[0] == begin_:
+
+        elif x[0] == do_:
             for exp in x[1:-1]:
                 eval(exp, env)
             x = x[-1]
 
+        elif x[0] == quasiquote_:
+            x = expand_quasiquote(x)
+            continue
+
         elif x[0] == 'quote':
             (_, exp) = x
             return exp
+
         elif x[0] == 'fn':  # (lambda (var*) exp)
-            if len(x) > 2:
-                (_, *exp) = x
-                exp = [list(exp)]
+            # [fn name? doc? opts? body]
+            # body -> simple  [.. [*args] body]
+            #      -> complex [.. [[*args0] body0]]  [[*args1] [body1]]
+
+            # remove fn tag
+            x.pop(0)
+            # (fn opts name [*args] *body)
+
+            if isa(x[0], Symbol):
+                name = x.pop(0)
             else:
-                (_, exp) = x
-            return Procedure(env, exp)
-        elif x[0] is quote_:
-            _, q = x
-            return q
+                name = gensym('fn__')
+
+            if isa(x[0], str):
+                doc = x.pop(0)
+            else:
+                doc = 'No docstring'
+
+            if isa(x[0], dict):
+                opts = x.pop(0)
+            else:
+                opts = {}
+
+            # possibilities
+            # [fn opts? name? doc? [x] x]
+            # [fn opts? name? [destructured] x]
+            # [fn
+
+            """[[args] <body> ] [[args] <body>] ...] or
+            [args] <body> ...]"""
+            if compoundfn(x):
+                exp = x
+            else:
+                exp = [x]
+
+            env[name] = name
+            return Procedure(env, exp, name, doc, opts)
 
 
         else:  # (proc exp*)
@@ -406,103 +417,85 @@ def eval(x, env=global_env, toplevel=False):
                 else:
                     x[1:] = [[quote_, e] for e in x[1:]]
 
-            proc, exps = expand_exp(env, x)
+            elif (isa(x[0], (Symbol, KeyWord)) and str(x[0]) in env):
+                name, args = env.find(x[0])[x[0]], x[1:]
 
-            if isa(proc, Procedure):
-                x = proc.proc(*exps)
-                proc = x
+                if isa(name, Procedure):
+                    procedure = name
+                    for p in procedure.procs:
+                        if len(p.parms) == len(args):
+                            proc = p
+                            break
+                    else:
+                        proc = procedure.variadic
 
-            if isa(x, Proc):
-                x = proc.exp
-                env = Env(proc.parms, exps, proc.env)
+                    if isa(proc, Proc):
+                        exp = proc.exp
+                        parms = proc.parms
+
+                        argsubs = [gensym('arg__') for _ in parms]
+                        bindings, args = zip(*itertools.chain(zip(argsubs, args), zip(parms, argsubs)))
+
+
+                        continue
+
+                if callable(name):
+                    proc = name
+                    exps = [eval(arg) for arg in args]
+                    return proc(*exps)
+
+
+            elif isa(x[0], (Symbol, KeyWord, Macro, Mac)) and str(x[0]) in macro_table:
+                macro, args = macro_table[x[0]], x[1:]
+
+                if isa(macro, Macro):
+                    for p in macro.procedures:
+                        if len(p.parms) == len(args):
+                            mac = p
+                            break
+                    else:
+                        mac = macro.variadic
+
+                    if isa(mac, Mac):
+                        exp = macro.exp
+                        parms = mac.parms
+                        argsubs = [gensym('arg__') for _ in parms]
+                        args = [[quote_, arg] for arg in args]
+                        x = [let_, [*zip(argsubs, args), *zip(parms, argsubs)], exp]
+                        continue
+                else:
+                    # Python-defined macro
+                    x = macro(*args)
+                    continue
+
+            elif isa(x[0], Procedure):
+                procedure = x[0]
+                args = x[1:]
+                for p in procedure.procs:
+                    if len(p.parms) == len(args):
+                        proc = p
+                        break
+                else:
+                    proc = procedure.variadic
+
+                args = mapv(eval, args)
+                f = proc.exp
+                if isa(f, Procedure):
+                    return [f, *args]
+                else:
+                    return f(*args)
+
+
+            elif isa(x, list) and toplevel is True:
+                x = mapv(eval, x)
                 continue
-
-            if callable(proc):
-                return proc(*exps)
-
-            # TODO: danger zone! put this hack in to help deal with macros
-            return [proc, *exps]
+            # literal
+            return x
 
 
 def require(x, predicate, msg="wrong length"):
     "Signal a syntax error if predicate is false."
     if not predicate: raise SyntaxError(to_string(x) + ': ' + msg)
-
-
-def expand(x, toplevel=False):
-    "Walk tree of x, making optimizations/fixes, and signaling SyntaxError."
-    # require(x, x != [])  # () => Error
-    if x == []:
-        return [quote_, x]
-    if not isa(x, list):  # constant => unchanged
-        return x
-    elif x[0] is quote_:  # (quote exp)
-        require(x, len(x) == 2)
-        return x
-    elif x[0] == if_:
-        if len(x) == 3:
-            x = x + [None]  # (if t c) => (if t c None)
-        require(x, len(x) == 4)
-        return mapv(expand, x)
-    elif x[0] is quote_:
-        return x
-    elif x[0] == def_ or x[0] == defmacro_:
-        require(x, len(x) >= 3)
-        _d, v, body = x[0], x[1], x[2]
-        v = str(v)
-        if _d == defmacro_:
-            _, _, body = expand(defn(*x[1:]))
-            # require(x, toplevel, "define-macro only allowed at top level")
-            with MacroContext():
-                proc = eval(body)
-            require(x, callable(proc), "macro must be a procedure")
-            macro_table[v] = proc  # (define-macro v proc)
-            return None  # => None; add v:proc to macro_table
-        exp = expand(body)
-        return [_d, v, exp]
-
-    elif x[0] is begin_:
-        if len(x) == 1:
-            return None  # (begin) => None
-        else:
-            return [expand(xi, toplevel) for xi in x]
-
-    elif x[0] == fn_:  # (lambda (x) e1 e2)
-        body = x[1:]
-
-        # body can either be of simple style [fn [x] x] or [fn [x] [f x]] or [fn [x] [f x] [g x]]
-        # compound style                     [fn [[a] a]] [[a b] ...] [[a b c] ... ]]
-
-        # compound style
-        # @formatter:off
-        if (ara(body, list)                 and
-            all(isa(e, list) for e in body) and
-            all(len(e) > 0 for e in body)   and
-            all(isa(e[0], list) for e in body)):
-            exp = [[args, *mapv(expand, xi)] for args, *xi in body]
-        # @formatter:on
-
-        # simple style
-        else:
-            args, *xi = body
-            exp = [[args, *mapv(expand, xi)]]
-
-        return [fn_, exp]
-
-    elif x[0] is quasiquote_:  # `x => expand_quasiquote(x)
-        require(x, len(x) == 2)
-        return expand_quasiquote(x[1])
-
-    # use of string was hack I put in to allow -> and ->> macros
-    elif isa(x[0], (Symbol, KeyWord)) and str(x[0]) in macro_table:
-        name = str(x[0])
-        body = x[1:]
-        # print(f'body: {body})')
-        res = expand(macro_table[name](*body), toplevel)
-        return res  # (m arg...)
-
-    else:  # => macroexpand if m isa macro
-        return mapv(expand, x)  # (f arg...) => expand each
 
 
 def is_pair(x): return x != [] and isa(x, list)
@@ -530,7 +523,6 @@ def special_functions():
         global_env['import'] = partial(import_, global_env)
         global_env['require'] = partial(require_, global_env)
         global_env['eval'] = eval
-        global_env['expand'] = expand
         global_env['destructure'] = lambda x: destruct(*zip(*x))
         global_env['/'] = div
         global_env['*env*'] = global_env
@@ -543,6 +535,5 @@ def special_functions():
 
         global_env['macroexpand'] = macroexpand
 
-        del global_env['lib']
     except FileNotFoundError:
         print('cannot find stdlib')
