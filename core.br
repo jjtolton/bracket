@@ -10,6 +10,8 @@
 [import [functools reduce]]
 [import time]
 [import [lib.utils AutoGenSym]]
+[import operator op]
+[import random]
 
 [def symgen [AutoGenSym]]
 
@@ -74,7 +76,8 @@
 
 [def bool py/bool]
 
-[defn gensym [] [symgen 'G__']]
+[defn gensym [[] [symgen 'G__']]
+             [[x] [symgen x]]]
 
 [defn range [[]     [itertools/count]]
             [[. xs] [apply py/range xs]]]
@@ -389,3 +392,27 @@
            ,-body]]]]]]
 
 
+[defmacro if-not
+  [[test then] `[if-not ,test ,then nil]]
+  [[test then else]
+   `[if [not ,test] ,then ,else]]]
+
+[defmacro when-not
+  [test . body]
+    `[if ,test nil [begin ,-body]]]
+
+[defn max-key [x key] [kwapply py/max x [hashmap 'key' key]]]
+
+[defn min-key [x key] [kwapply py/min x [hashmap 'key' key]]]
+
+[defn quot [a b] [let [[q] [py/divmod a b]] q]]
+
+[defn rem [a b] [let [[_ r] [py/divmod a b]] r]]
+
+[def mod op/mod]
+
+[defn rand [] [random/random]]
+
+[def rand-int random/randint]
+
+[defn rand-nth random/choice]
