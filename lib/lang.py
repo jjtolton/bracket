@@ -1,17 +1,17 @@
 import io
-import re
-from functools import partial, reduce
-
 import itertools
+import re
+from functools import partial
+
 from naga import mapv
 
-from lib.destructure import destruct
-from lib.macros import defn, macro_table, _let
-from lib.special_forms import KeyWord
 from lib.core import div, nil
-from lib.symbols import Symbol, PyObject, quote_, quasiquote_, unquote_, unquotesplicing_, do_, if_, def_, defmacro_, \
-    fn_, append_, cons_, autogensym_, let_
-from lib.utils import isa, to_string, ara, flatten, AutoGenSym
+from lib.destructure import destruct
+from lib.macros import macro_table, _let
+from lib.special_forms import KeyWord
+from lib.symbols import Symbol, PyObject, quote_, quasiquote_, unquote_, unquotesplicing_, do_, append_, cons_, \
+    autogensym_, let_
+from lib.utils import isa, to_string, ara, AutoGenSym
 
 gensym = AutoGenSym()
 
@@ -56,44 +56,10 @@ class InPort(object):
 class Env(dict):
     """An environment: a dict of {'var':val} pairs, with an outer Env."""
 
-    def __init__(self, parms=(), args=(), outer=None, name=None, macro=False):
-        # Bind parm list to corresponding args, or single parm to list of args
-
-        if macro is True:
-            self.outer = outer
-            if isa(parms, Symbol):
-                self.update({parms: list(args)})
-            else:
-                if len(args) != len(parms):
-                    raise TypeError('expected %s, given %s, '
-                                    % (to_string(parms), to_string(args)))
-                self.update(zip(parms, args))
-                self.update([('&form', args)])
-                self.update([('&env', self)])
-        else:
-            self.outer = outer
-
-            bindings = destruct(parms, args)
-            fparms = set(flatten(parms)) - {'.'}
-
-            for k, v in bindings:
-                if isa(k, (list, Symbol)):
-                    try:
-                        if isa(v, list) and len(v) > 0 and not isa(v[0], list) and self.find(v[0]) and k not in fparms:
-                            self.update([(k, eval(v, self))])
-                        else:
-                            self.update([(k, v)])
-
-                    except Exception as e:
-                        if __debug__ is True:
-                            print(e)
-                        self.update([(k, v)])
-                else:
-                    self.update([(k, v)])
-
-                    # try:
-                    #     self.update({k: eval(v, self)})
-                    # except Exception:
+    def __init__(self, parms: (tuple, list) = (), args: (tuple, list) = (), outer: dict = None, name: str = None):
+        self.name = name
+        self.outer = outer
+        self.update(zip(parms, args))
 
     def find(self, var):
         """Find the innermost Env where var appears."""
@@ -163,7 +129,7 @@ def require_(global_env, n, name=None):
             with open(name) as f:
                 for x in read(f.read())[1:]:
                     try:
-                        eval(expand(x), global_env)
+                        eval(x, global_env)
                     except Exception as e:
                         print(f'unable to parse {x}')
                 return None
@@ -246,7 +212,7 @@ class Proc:
     "A user-defined Scheme procedure."
 
     def __init__(self, parms, exp, env):
-        self.parms, self.exp, self.env = parms, exp, env
+        self.parms, self.exp, self.env = parms, [do_, *exp], env
 
     def __call__(self, *args):
         let1 = _let(self.parms, list(args), self.exp)
@@ -254,7 +220,8 @@ class Proc:
 
 
 class Procedure:
-    def __init__(self, env, forms, name, doc, opts):
+    def __init__(self, env, forms, name, doc, opts, source):
+        self.source = source
         self.opts = opts
         self.doc = doc
         self.name = name
@@ -289,7 +256,7 @@ class Mac(Proc):
         else:
             parms = self.parms
 
-        return eval(self.exp, Env(parms, args, self.env, macro=True))
+        return eval(self.exp, Env(parms, args, self.env))
 
 
 class Macro(Procedure):
@@ -373,7 +340,7 @@ def eval(x, env=global_env, toplevel=False):
             # [fn name? doc? opts? body]
             # body -> simple  [.. [*args] body]
             #      -> complex [.. [[*args0] body0]]  [[*args1] [body1]]
-
+            source = x[:]
             # remove fn tag
             x.pop(0)
             # (fn opts name [*args] *body)
@@ -406,7 +373,7 @@ def eval(x, env=global_env, toplevel=False):
                 exp = [x]
 
             env[name] = name
-            return Procedure(env, exp, name, doc, opts)
+            return Procedure(env, exp, name, doc, opts, source)
 
 
         else:  # (proc exp*)
@@ -417,7 +384,7 @@ def eval(x, env=global_env, toplevel=False):
                 else:
                     x[1:] = [[quote_, e] for e in x[1:]]
 
-            elif (isa(x[0], (Symbol, KeyWord)) and str(x[0]) in env):
+            if (isa(x[0], (Symbol, KeyWord)) and str(x[0]) in env):
                 name, args = env.find(x[0])[x[0]], x[1:]
 
                 if isa(name, Procedure):
@@ -436,7 +403,11 @@ def eval(x, env=global_env, toplevel=False):
                         argsubs = [gensym('arg__') for _ in parms]
                         bindings, args = zip(*itertools.chain(zip(argsubs, args), zip(parms, argsubs)))
 
-
+                        bindings = destruct(bindings, args, ag=gensym)
+                        proc.env.update(bindings)
+                        for binding, arg in bindings:
+                            proc.env[binding] = eval(arg, proc.env)
+                        x = eval(exp, proc.env)
                         continue
 
                 if callable(name):

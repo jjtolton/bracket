@@ -218,5 +218,5 @@ if __name__ == '__main__':
     else:
         repl = repl
     print("Welcome to [bracket]!")
-    # special_functions()
+    special_functions()
     repl(env=global_env)
