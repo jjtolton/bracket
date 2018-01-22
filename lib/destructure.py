@@ -36,6 +36,8 @@ def destruct(bindings, args, ag=None):
     def symbol_binding(b, v):
         return [[b, v]]
 
+
+
     if isa(bindings, (Symbol, str)):
         return symbol_binding(bindings, args)
 
@@ -56,6 +58,7 @@ def destruct(bindings, args, ag=None):
     if isa(b, list):
         if len(b) == 0:
             return []
+
         return vector_bindings(b, v) + destruct(rest(bindings), rest(args), ag)
 
     if isa(b, (Symbol, str)):

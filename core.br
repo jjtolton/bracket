@@ -1,6 +1,6 @@
 [import lib.core lib]
-[import [lib.core add mul sub div gt lt lte gte exit cons symbol pformat dropv count apply kwapply in_]]
-[import [naga append conj first last rest get drop assoc mapv partition inc dec second LazySeq some update]]
+[import [lib.core add mul sub div gt lt lte gte exit cons symbol pformat dropv count kwapply in_]]
+[import [naga append conj first last rest get drop assoc mapv partition inc dec second LazySeq some update apply]]
 [import [naga take interleave]]
 [import naga]
 [import [lib.special_forms Set HashMap]]
@@ -12,6 +12,8 @@
 [import [lib.utils AutoGenSym]]
 [import operator op]
 [import random]
+
+[py/print 'loading core']
 
 [def symgen [AutoGenSym]]
 
@@ -305,7 +307,7 @@
 
 [defn identity [x] x]
 
-[defn partial [f . xs] [fn [. args] [apply f [apply conj xs args]]]]
+[defn partial [f . xs] [fn [. args] [apply f [append xs args]]]]
 
 [def map py/map]
 
@@ -411,8 +413,8 @@
 
 [def mod op/mod]
 
-[defn rand [] [random/random]]
+[def rand random/random]
 
 [def rand-int random/randint]
 
-[defn rand-nth random/choice]
+[def rand-nth random/choice]

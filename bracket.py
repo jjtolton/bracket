@@ -24,7 +24,7 @@ def debug_repl(prompt='$-> ', inport=InPort(sys.stdin), out=sys.stdout, env=glob
             x = parse(inport)
             if x is eof_object:
                 return
-            val = eval(x, env=env, toplevel=True)
+            val = eval(x, env=env)
             if val is not None and out:
                 output = to_string(val)
                 print(f';;=> {output}', file=out)
@@ -172,7 +172,7 @@ def prompt_continuation(_, width):
     return [((), '#_>', ' ' * width)]
 
 
-def repl(prompt='$-> ', out=sys.stdout, debug=False, env=global_env):
+def repl(prompt='$->  ', out=sys.stdout, debug=False, env=global_env):
     "A prompt-read-eval-print loop."
     history = FileHistory('history.log')
     processor = HighlightMatchingBracketProcessor()
@@ -193,7 +193,9 @@ def repl(prompt='$-> ', out=sys.stdout, debug=False, env=global_env):
                 return
             val = eval(x, env=env)
             if val is not None and out:
-                if not isinstance(val, (dict, str, Symbol)) and hasattr(val, '__iter__'):
+                if (not isinstance(val, (dict, str, Symbol)) and
+                        hasattr(val, '__iter__') and
+                        not isinstance(type(val), type)):
                     val = list(val)
                 output = to_string(val)
                 print(f';;=> {output}', file=out)

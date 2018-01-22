@@ -99,8 +99,14 @@ def listp(x):
     return isa(x, list)
 
 
-def to_list(x):
-    return list(x)
+def to_list(*xs):
+    if isa(xs[-1], (list, tuple)):
+        xs = list(xs[:-1]) + list(xs[-1])
+        return list(xs)
+    elif len(xs) == 1:
+        return list(xs[0])
+    else:
+        return list(xs)
 
 
 def nullp(x):
@@ -133,14 +139,14 @@ def false_(x):
     return x is None or x is False
 
 
-def apply(f, *x):
+def apply(f, *x, **kwargs):
     lst = x[-1]
     if isa(lst, (list, tuple, str)):
         a = list(x[:-1])
         args = a + list(lst)
     else:
         args = x
-    return f(*args)
+    return f(*args, **kwargs)
 
 
 def kwapply(f, *args):
