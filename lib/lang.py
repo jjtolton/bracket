@@ -1,17 +1,16 @@
 import io
-import itertools
 import re
 import types
 from functools import partial
 
-from naga import mapv, partition
+from naga import mapv
 
 from lib.core import div, nil
 from lib.destructure import destruct
-from lib.macros import macro_table, _let, defn
+from lib.macros import macro_table
 from lib.special_forms import KeyWord
 from lib.symbols import Symbol, PyObject, quote_, quasiquote_, unquote_, unquotesplicing_, do_, append_, cons_, \
-    autogensym_, let_, defmacro_
+    autogensym_, defmacro_
 from lib.utils import isa, to_string, ara, AutoGenSym
 
 gensym = AutoGenSym()
@@ -57,7 +56,8 @@ class InPort(object):
 class Env(dict):
     """An environment: a dict of {'var':val} pairs, with an outer Env."""
 
-    def __init__(self, parms: (tuple, list) = (), args: (tuple, list) = (), outer: dict = None, name: str = None, macro: bool=False):
+    def __init__(self, parms: (tuple, list) = (), args: (tuple, list) = (), outer: dict = None, name: str = None,
+                 macro: bool = False):
         self.name = name
         self.outer = outer
 
@@ -74,7 +74,6 @@ class Env(dict):
                     self[parm] = eval(arg, self)
                 else:
                     self[parm] = arg
-
 
     def find(self, var, not_found=nil):
         """Find the innermost Env where var appears."""
@@ -263,30 +262,33 @@ class Procedure:
 
 
 class Mac(Proc):
+    def __call__(self, *args, env=None):
+        if env is None:
+            env = Env(outer=global_env)
+            env.update(self.env)
 
-    def __call__(self, *args, **kwargs):
-        return eval(self.exp, Env(self.parms, args, outer=self.env, macro=True))
-    # def __call__(self, *args):
-    #     parms = self.parms
-    #     exp = self.exp
-    #     env = self.env
-    #     if len(parms) == 0:
-    #         res = eval(exp, Env(self.parms, args, env))
-    #     else:
-    #         argsubs = [gensym('parm__') for _ in parms]
-    #         bindings, args = zip(*itertools.chain(zip(argsubs, args), zip(parms, argsubs)))
-    #
-    #         bindings = destruct(bindings, args, ag=gensym)
-    #         new_env = Env(outer=env)
-    #         for parm, arg in partition(2, bindings):
-    #             if parm not in argsubs:
-    #                 new_env[parm] = eval(arg, new_env)
-    #             else:
-    #                 new_env[parm] = arg
-    #
-    #         res = eval(exp, new_env)
-    #
-    #     return res
+        return eval(self.exp, Env(self.parms, args, outer=env, macro=True))
+        # def __call__(self, *args):
+        #     parms = self.parms
+        #     exp = self.exp
+        #     env = self.env
+        #     if len(parms) == 0:
+        #         res = eval(exp, Env(self.parms, args, env))
+        #     else:
+        #         argsubs = [gensym('parm__') for _ in parms]
+        #         bindings, args = zip(*itertools.chain(zip(argsubs, args), zip(parms, argsubs)))
+        #
+        #         bindings = destruct(bindings, args, ag=gensym)
+        #         new_env = Env(outer=env)
+        #         for parm, arg in partition(2, bindings):
+        #             if parm not in argsubs:
+        #                 new_env[parm] = eval(arg, new_env)
+        #             else:
+        #                 new_env[parm] = arg
+        #
+        #         res = eval(exp, new_env)
+        #
+        #     return res
 
 
 class Macro(Procedure):
@@ -362,7 +364,7 @@ def eval(x, env=global_env):
                 # x.pop(0)
                 # (defmacro opts name [*args] *body)
 
-                if isa(x[0], Symbol):
+                if isa(x[0], (Symbol, KeyWord)):
                     name, *x = x
                 else:
                     name = gensym('fn__')
@@ -386,7 +388,7 @@ def eval(x, env=global_env):
 
                 macro = Macro(env, exp, name, doc, opts, source)
                 # require(x, callable(proc), "macro must be a procedure")
-                macro_table[name] = macro  # (define-macro v proc)
+                macro_table[str(name)] = macro  # (define-macro v proc)
                 return None  # => None; add v:proc to macro_table
 
             elif x[0] == 'def':  # (define var exp)
@@ -456,15 +458,12 @@ def eval(x, env=global_env):
                         x[1:] = [[quote_, e] for e in x[1:]]
 
                 name, args = eval(x[0], env), x[1:]
-                # procedure evaluation
+                # procedure
 
                 if isa(name, Procedure) and not isa(name, Macro):
                     procedure = name
                     proc = procedure.proc(*args)
-                    e = Env()
-                    e.update(env)
-                    e.update(proc.env)
-                    env = Env(proc.parms, args, Env(outer=e))
+                    env = Env(proc.parms, args, Env(outer=env))
                     x = proc.exp
                     continue
 
@@ -474,7 +473,8 @@ def eval(x, env=global_env):
                     x = mac(*args)
                     continue
 
-                elif isa(x[0], Symbol) and x[0] in macro_table:
+                elif isa(x[0], (Symbol, KeyWord)) and str(x[0]) in macro_table:
+                    name = macro_table[str(x[0])]
                     x = name(*args)
                     continue
 
