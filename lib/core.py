@@ -59,7 +59,7 @@ def exit():
 
 def eq(*args):
     '=='
-    return True if reduce(lambda x, y: y if x == y else False, args) is not False else False
+    return reduce(op.eq, args)
 
 
 def eqq(*args):

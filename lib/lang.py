@@ -1,15 +1,19 @@
+import collections
 import io
+import pprint
 import re
 import types
-from functools import partial
+from collections import ChainMap
+from functools import partial, reduce
 
-from naga import mapv
+from naga import mapv, merge, identity
 
 from lib.core import div, nil
 from lib.destructure import destruct
 from lib.macros import macro_table
 from lib.special_forms import KeyWord
-from lib.symbols import Symbol, PyObject, quote_, quasiquote_, unquote_, unquotesplicing_, do_, append_, cons_, \
+from lib.symbols import Symbol, PyObject, quote_, quasiquote_, unquote_, \
+    unquotesplicing_, do_, append_, cons_, \
     autogensym_, defmacro_
 from lib.utils import isa, to_string, ara, AutoGenSym
 
@@ -26,7 +30,7 @@ class InPort(object):
                                    [^\s\['"`,;\]]*)        # match everything that is NOT a special character
                                    (.*)                    # match the rest of the string""",
 
-                           flags=re.VERBOSE)
+                           flags=re.VERBOSE | re.DOTALL | re.MULTILINE)
 
     def __init__(self, file):
         self.file = file
@@ -53,29 +57,38 @@ class InPort(object):
         return self.next_token()
 
 
-class Env(dict):
-    """An environment: a dict of {'var':val} pairs, with an outer Env."""
+class NotFound:
+    def __call__(self, x):
+        return x is NotFound
 
-    def __init__(self, parms: (tuple, list) = (), args: (tuple, list) = (), outer: dict = None, name: str = None,
+
+class Env(dict):
+    """An environment: a dict of {'var':val} pairs, with a                    # env = Env(outer=env)(mac.env)
+n outer Env."""
+
+    def __init__(self, *maps, parms: (tuple, list) = (),
+                 args: (tuple, list) = (), name: str = None,
                  macro: bool = False):
+
         self.name = name
-        self.outer = outer
+        self.maps = maps
 
         bindings = destruct(parms, args, ag=gensym)
         if len(bindings) == 0:
             return
         parms, args = list(zip(*bindings))
+        env = Env(self, *self.maps)
         if macro is False:
             for parm, arg in zip(parms, args):
-                self[parm] = eval(arg, self)
+                self[parm] = eval(arg, env)
         elif macro is True:
             for parm, arg in zip(parms, args):
                 if parm not in parms:
-                    self[parm] = eval(arg, self)
+                    self[parm] = eval(arg, env)
                 else:
                     self[parm] = arg
 
-    def find(self, var, not_found=nil):
+    def find(self, var, not_found=NotFound):
         """Find the innermost Env where var appears."""
         if '/' in var:
             n, m = var.split('/', maxsplit=1)
@@ -83,16 +96,19 @@ class Env(dict):
 
         if var in self:
             return self
-        elif self.outer is None:
-            if not_found is nil:
-                raise LookupError(f"Symbol `{var} is undefined")
-            else:
-                return not_found
-        else:
-            return self.outer.find(var, not_found=not_found)
+
+        val = NotFound
+        if len(self.maps) > 0:
+            for m in self.maps:
+                val = m.find(var)
+                if val is NotFound:
+                    continue
+
+        return not_found if val is NotFound else val
 
 
 def import_(global_env, imports, name=None):
+    excluded = {'copyright'}
     if isa(imports, (Symbol, str)):
         if name is None:
             name = imports
@@ -100,7 +116,8 @@ def import_(global_env, imports, name=None):
         package = Env(name=name)
         for k, v in vars(__import__(imports, globals(), locals(),
                                     fromlist=imports.split('.')[:-1])).items():
-            package[k] = v
+            if k not in excluded:
+                package[k] = v
         global_env[name] = package
 
     if isa(imports, list):
@@ -110,10 +127,12 @@ def import_(global_env, imports, name=None):
 
         if len(args) == 1 and args[0] == '*':
             for k, v in vars(import__).items():
-                global_env[k] = v
+                if k not in excluded:
+                    global_env[k] = v
         else:
             for arg in args:
-                global_env[arg] = vars(import__)[arg]
+                if arg not in excluded:
+                    global_env[arg] = vars(import__)[arg]
 
 
 def require_(global_env, n, name=None):
@@ -122,7 +141,7 @@ def require_(global_env, n, name=None):
             name = n
 
         fname = f'{n}.br'
-        new_env = Env(name=n, outer=global_env)
+        new_env = Env(global_env, name=n)
         with open(fname) as f:
             eval(parse(f.read()), new_env)
         global_env[name] = new_env
@@ -134,7 +153,7 @@ def require_(global_env, n, name=None):
             name = f'{n[0]}.br'
             items = n[1]
         if isa(items, list):
-            temp_env = Env(outer=global_env)
+            temp_env = Env(global_env)
             with open(name) as f:
                 contents = f.read()
                 eval(parse(contents), temp_env)
@@ -232,7 +251,7 @@ class Proc:
         self.parms, self.exp, self.env = parms, [do_, *exp], env
 
     def __call__(self, *args, **kwargs):
-        return eval(self.exp, Env(self.parms, args, self.env))
+        return eval(self.exp, Env(self.env, parms=self.parms, args=args))
 
 
 class Procedure:
@@ -264,31 +283,10 @@ class Procedure:
 class Mac(Proc):
     def __call__(self, *args, env=None):
         if env is None:
-            env = Env(outer=global_env)
-            env.update(self.env)
+            env = Env(self.env, global_env)
 
-        return eval(self.exp, Env(self.parms, args, outer=env, macro=True))
-        # def __call__(self, *args):
-        #     parms = self.parms
-        #     exp = self.exp
-        #     env = self.env
-        #     if len(parms) == 0:
-        #         res = eval(exp, Env(self.parms, args, env))
-        #     else:
-        #         argsubs = [gensym('parm__') for _ in parms]
-        #         bindings, args = zip(*itertools.chain(zip(argsubs, args), zip(parms, argsubs)))
-        #
-        #         bindings = destruct(bindings, args, ag=gensym)
-        #         new_env = Env(outer=env)
-        #         for parm, arg in partition(2, bindings):
-        #             if parm not in argsubs:
-        #                 new_env[parm] = eval(arg, new_env)
-        #             else:
-        #                 new_env[parm] = arg
-        #
-        #         res = eval(exp, new_env)
-        #
-        #     return res
+        return eval(self.exp,
+                    Env(env, parms=self.parms, args=args, macro=True))
 
 
 class Macro(Procedure):
@@ -319,11 +317,14 @@ def alldiff(xs):
 def compoundfn(x):
     if not ara(x, list):
         return False
-    if not ara([xi[0] for xi in x], list):
+    if not ara([(xi[0] if len(xi) >= 1 else None) for xi in x], list):
         return False
     if not alldiff(len(xi[0]) for xi in x):
         return False
     return True
+
+
+still = identity
 
 
 def eval(x, env=global_env):
@@ -333,25 +334,29 @@ def eval(x, env=global_env):
 
             # base case 1: binding
             if isa(x, Symbol):  # variable reference
+                location = env.find(str(x))
 
-
-                loc = env.find(x, not_found=False)
-                if loc:
-                    if '/' in x:
-                        return loc[x.split('/')[-1]]
+                if location is NotFound:
+                    location = macro_table.get(str(x), NotFound)
+                    if location is still(NotFound):
+                        raise ValueError(f'Symbol({x}) is undefined')
                     else:
-                        return loc[x]
-
-                elif macro_table.get(x):
-                    return macro_table[x]
+                        return location
+                elif '/' in x:
+                    return location[str(x.split('/')[-1])]
                 else:
-                    raise ValueError(f'Symbol({x}) is undefined')
+                    return location[str(x)]
 
-            elif not isa(x, list) or isa(x, list) and len(x) == 0:  # constant literal
+
+
+            elif not isa(x, list) or isa(x, list) and len(
+                    x) == 0:  # constant literal
                 return x
             elif x[0] == 'if':  # (if test conseq alt)
                 (_, test, conseq, alt) = x
-                x = (conseq if eval(test, env) not in (None, False, nil) else alt)
+                x = (
+                    conseq if eval(test, env) not in (
+                        None, False, nil) else alt)
 
             elif x[0] == defmacro_:
                 # compound form only!!
@@ -446,7 +451,7 @@ def eval(x, env=global_env):
                 else:
                     exp = [x]
 
-                return Procedure(Env(outer=env), exp, name, doc, opts, source)
+                return Procedure(Env(env), exp, name, doc, opts, source)
 
 
             else:  # (proc exp*)
@@ -463,14 +468,15 @@ def eval(x, env=global_env):
                 if isa(name, Procedure) and not isa(name, Macro):
                     procedure = name
                     proc = procedure.proc(*args)
-                    env = Env(proc.parms, args, Env(outer=env))
+                    env = Env(proc.env, env, parms=proc.parms, args=args)
                     x = proc.exp
                     continue
 
                 elif isa(name, Macro):
                     macro = name
                     mac = macro.proc(*args)
-                    x = mac(*args)
+                    env = Env(mac.env, env)
+                    x = mac(*args, env=env)
                     continue
 
                 elif isa(x[0], (Symbol, KeyWord)) and str(x[0]) in macro_table:
@@ -523,7 +529,7 @@ def expand_quasiquote(x):
         return [cons_, expand_quasiquote(x[0]), expand_quasiquote(x[1:])]
 
 
-def special_functions():
+def special_functions(global_env):
     try:
         global_env['import'] = partial(import_, global_env)
         global_env['require'] = partial(require_, global_env)
@@ -532,39 +538,18 @@ def special_functions():
         global_env['/'] = div
         global_env['*env*'] = global_env
         global_env['*mac*'] = macro_table
+        global_env['symbol'] = Symbol
+        global_env['symbol?'] = lambda x: isinstance(x, Symbol)
 
-        eval(parse('[require [core *]]]'), global_env)
+        eval(parse('[require [core  *]]]'), global_env)
 
-        def macroexpand(x):
-            x = eval(x, global_env)
-            macro, args = macro_table[x[0]], x[1:]
+        # eval(parse('[require tests ]]'), global_env)
 
-            if isa(macro, Macro):
-                for p in macro.procs:
-                    if len(p.parms) == len(args):
-                        mac = p
-                        break
-                else:
-                    mac = macro.variadic
+        # del global_env['tests']
 
-                parms = mac.parms
-                mac_env = Env(outer=mac.env)
-                args = [[quote_, arg] for arg in args]
 
-                bindings = destruct(parms, args, ag=gensym)
-                for parm, arg in bindings:
-                    res = eval(arg, mac_env)
-                    mac_env[parm] = res
-
-                x = mac.exp
-                return x
-
-            else:
-                # Python-defined macro
-                x = macro(*args)
-                return x
-
-        global_env['macroexpand'] = macroexpand
+        global_env['macroexpand'] = lambda x: [quasiquote_, x]
+        return global_env
 
     except FileNotFoundError:
         print('cannot find stdlib')

@@ -17,9 +17,13 @@
 
 [def symgen [AutoGenSym]]
 
-[defmacro . [obj attr . args]
-            [let [attr [py/str attr]]
-                 `[[py/getattr ,obj ,attr] ,-args]]]
+[defmacro . [[obj attr . args]
+             [let [attr [py/str attr]]
+                  `[[py/getattr ,obj ,attr] ,-args]]]
+            [[obj attr]
+             [let [attr [py/str attr]]
+                  `[[py/getattr ,obj, attr]]]]]
+
 
 [defmacro .- [obj attr]
      [let [attr [py/str attr]]
@@ -64,6 +68,7 @@
 
 [def not lib/not_]
 
+
 [def list? lib/listp]
 
 [def null? lib/nullp]
@@ -100,6 +105,7 @@
 [defn butlast [x] [[.- x __getitem__] [py/slice 0 -1]]]
 
 [defn assert
+    [[exp]         [assert t exp]]
     [[exp res]     [let [msg [pformat 'expecting {}, got {}' exp res]]
                      [assert exp res msg]]]
     [[exp res msg] [if [= exp res]
@@ -124,9 +130,7 @@
               `[imply ,f ,-[butlast xs] ,-[last xs]]
               `[,f [,-xs]]]]
 
-[defn print [[x]      [py/print x]]
-            [[x . xs] [apply py/print x xs]]]
-
+[def print py/print]
 
 [defmacro and [[] true]
              [[x]    x]
@@ -415,6 +419,19 @@
 
 [def rand random/random]
 
-[def rand-int random/randint]
+[defn rand-int
+   'produces a random number or something'
+   [. xs]
+   [apply random/randint xs]]
 
 [def rand-nth random/choice]
+
+[defmacro source [f]
+  [.- [get *env* f] source]]
+
+[defmacro doc [f]
+  [.- [get *env* f] doc]]
+
+[defn map-indexed [f . args]
+   [apply map f [map py/enumerate args]]]
+

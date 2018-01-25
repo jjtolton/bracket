@@ -1,0 +1,16 @@
+
+[defn pos-tests []
+    [and
+      [assert t]
+      [assert f f]
+      [assert t t]
+      [assert [0 -1 -2] [mapv sub [range 3]]]]
+      [assert [0 -1 -2] [py/list [map sub [range 3]]]]
+      [assert [0 -1 -2] [mapv [fn [x] [sub x]] [range 3]]]]
+
+
+[defn neg-tests []
+  [or [assert f]]]
+
+[assert t [pos-tests] 'self-test failed!']
+[assert f [neg-tests] 'self-test failed!']
