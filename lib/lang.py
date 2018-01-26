@@ -62,7 +62,32 @@ class NotFound:
         return x is NotFound
 
 
-class Env(dict):
+class EnvMap(list, collections.MutableMapping):
+    def __init__(self, *maps):
+        super().__init__(maps)
+
+    def __getitem__(self, item):
+        if isinstance(item, int):
+            for n, m in enumerate(self):
+                if n == item:
+                    return m
+        else:
+            for m in self:
+                if item in m:
+                    return m[item]
+
+    def __setitem__(self, key, value):
+        self[0][key] = value
+
+    def __contains__(self, item):
+        for m in self:
+            if item in m:
+                return True
+        else:
+            return False
+
+
+class Env(EnvMap):
     """An environment: a dict of {'var':val} pairs, with a                    # env = Env(outer=env)(mac.env)
 n outer Env."""
 
@@ -70,21 +95,36 @@ n outer Env."""
                  args: (tuple, list) = (), name: str = None,
                  macro: bool = False):
 
+        if len(maps) == 0:
+            maps = ({},)
         self.name = name
-        self.maps = maps
+
+
+        def rmaps(*ms):
+            if len(ms) == 1 and isinstance(ms[0], list):
+                for item in ms[0]:
+                    yield item
+            elif len(ms) == 1 and isinstance(ms[0], dict):
+                yield ms[0]
+            else:
+                for item in ms:
+                    yield from rmaps(item)
+
+        for m in rmaps(*maps):
+            self.append(m)
 
         bindings = destruct(parms, args, ag=gensym)
         if len(bindings) == 0:
             return
+
         parms, args = list(zip(*bindings))
-        env = Env(self, *self.maps)
         if macro is False:
             for parm, arg in zip(parms, args):
-                self[parm] = eval(arg, env)
+                self[parm] = eval(arg, self)
         elif macro is True:
             for parm, arg in zip(parms, args):
                 if parm not in parms:
-                    self[parm] = eval(arg, env)
+                    self[parm] = eval(arg, self)
                 else:
                     self[parm] = arg
 
@@ -94,15 +134,11 @@ n outer Env."""
             n, m = var.split('/', maxsplit=1)
             return self.find(n)[n].find(m)
 
-        if var in self:
-            return self
-
         val = NotFound
-        if len(self.maps) > 0:
-            for m in self.maps:
-                val = m.find(var)
-                if val is NotFound:
-                    continue
+        for m in self:
+            if var in m:
+                val = m
+                break
 
         return not_found if val is NotFound else val
 
@@ -346,8 +382,6 @@ def eval(x, env=global_env):
                     return location[str(x.split('/')[-1])]
                 else:
                     return location[str(x)]
-
-
 
             elif not isa(x, list) or isa(x, list) and len(
                     x) == 0:  # constant literal

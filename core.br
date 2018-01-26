@@ -273,7 +273,7 @@
 
 [defmacro timed [form]
    `[let [t [time/time]
-          r ,[form]]
+          r ,form]
       [print [sub [time/time] t]]
       r]]
 
@@ -432,6 +432,5 @@
 [defmacro doc [f]
   [.- [get *env* f] doc]]
 
-[defn map-indexed [f . args]
-   [apply map f [map py/enumerate args]]]
-
+[defn map-indexed [f coll]
+  [mapv [fn [[i x]] [f i x]] [py/enumerate coll]]]

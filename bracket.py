@@ -178,7 +178,7 @@ def repl(prompt='$->  ', out=sys.stdout, debug=False, env=global_env):
     processor = HighlightMatchingBracketProcessor()
     while True:
         try:
-            words = WordCompleter([*env.keys(), *macro_table.keys(), *map(str, specforms)])
+            words = WordCompleter([*[k for m in env for k in m], *macro_table.keys(), *map(str, specforms)])
             text = repl_prompt(message=prompt,
                                completer=words,
                                history=history,
